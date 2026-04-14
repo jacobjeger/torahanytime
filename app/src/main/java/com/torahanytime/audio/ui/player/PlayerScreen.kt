@@ -6,6 +6,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -18,10 +19,12 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import com.torahanytime.audio.data.repository.FavoriteRepository
 import com.torahanytime.audio.ui.theme.TATBlue
 import com.torahanytime.audio.ui.theme.TATOrange
 import com.torahanytime.audio.ui.theme.TATTextSecondary
 import com.torahanytime.audio.util.formatDuration
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -39,6 +42,8 @@ fun PlayerScreen(
 ) {
     val lecture = state.currentLecture ?: return
     var showSleepTimer by remember { mutableStateOf(false) }
+    val isFavorite by FavoriteRepository.isFavorite(lecture.id).collectAsState(initial = false)
+    val scope = rememberCoroutineScope()
 
     if (showSleepTimer) {
         SleepTimerDialog(
@@ -124,7 +129,22 @@ fun PlayerScreen(
                 )
             }
 
-            Spacer(Modifier.height(24.dp))
+            Spacer(Modifier.height(8.dp))
+
+            // Favorite button
+            IconButton(
+                onClick = { scope.launch { FavoriteRepository.toggleFavorite(lecture) } },
+                modifier = Modifier.focusable()
+            ) {
+                Icon(
+                    imageVector = if (isFavorite) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder,
+                    contentDescription = if (isFavorite) "Unfavorite" else "Favorite",
+                    tint = if (isFavorite) TATOrange else TATTextSecondary,
+                    modifier = Modifier.size(28.dp)
+                )
+            }
+
+            Spacer(Modifier.height(12.dp))
 
             // Seek bar
             val progress = if (state.duration > 0) {

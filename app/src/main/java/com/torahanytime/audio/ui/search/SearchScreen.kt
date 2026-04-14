@@ -6,6 +6,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.History
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -18,12 +20,13 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.torahanytime.audio.TATApplication
 import com.torahanytime.audio.data.api.ApiClient
+import com.torahanytime.audio.data.local.entity.SearchHistoryEntry
 import com.torahanytime.audio.data.model.Lecture
 import com.torahanytime.audio.data.model.Speaker
 import com.torahanytime.audio.data.model.Topic
 import com.torahanytime.audio.data.repository.SpeakerCache
-import com.torahanytime.audio.data.repository.SpeakerRepository
 import com.torahanytime.audio.data.repository.TopicRepository
 import com.torahanytime.audio.ui.common.LectureItem
 import com.torahanytime.audio.ui.common.SpeakerItem
@@ -38,9 +41,9 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 
 class SearchViewModel : ViewModel() {
-    private val speakerRepo = SpeakerRepository()
     private val topicRepo = TopicRepository()
     private val api = ApiClient.api
+    private val searchHistoryDao = TATApplication.db.searchHistoryDao()
 
     private val _query = MutableStateFlow("")
     val query: StateFlow<String> = _query
@@ -57,6 +60,8 @@ class SearchViewModel : ViewModel() {
     private val _loading = MutableStateFlow(false)
     val loading: StateFlow<Boolean> = _loading
 
+    val searchHistory = searchHistoryDao.getRecent()
+
     private var searchJob: Job? = null
 
     fun updateQuery(q: String) {
@@ -71,10 +76,13 @@ class SearchViewModel : ViewModel() {
         searchJob = viewModelScope.launch {
             delay(300)
             _loading.value = true
+
+            // Save to search history
+            searchHistoryDao.upsert(SearchHistoryEntry(query = q))
+
             try {
                 val deferredSpeakers = async {
                     try {
-                        // Use cached speakers for instant results
                         SpeakerCache.searchSpeakers(q).take(10)
                     } catch (_: Exception) { emptyList() }
                 }
@@ -97,6 +105,14 @@ class SearchViewModel : ViewModel() {
             _loading.value = false
         }
     }
+
+    fun deleteSearchHistory(query: String) {
+        viewModelScope.launch { searchHistoryDao.delete(query) }
+    }
+
+    fun clearSearchHistory() {
+        viewModelScope.launch { searchHistoryDao.deleteAll() }
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -113,6 +129,7 @@ fun SearchScreen(
     val topics by vm.topics.collectAsState()
     val lectures by vm.lectures.collectAsState()
     val loading by vm.loading.collectAsState()
+    val searchHistory by vm.searchHistory.collectAsState(initial = emptyList())
     val focusRequester = remember { FocusRequester() }
 
     LaunchedEffect(Unit) { focusRequester.requestFocus() }
@@ -138,6 +155,57 @@ fun SearchScreen(
                     singleLine = true,
                     shape = MaterialTheme.shapes.medium
                 )
+            }
+
+            // Show search history when no active search
+            if (query.length < 2 && searchHistory.isNotEmpty()) {
+                item {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        SectionHeader("RECENT SEARCHES")
+                        TextButton(onClick = { vm.clearSearchHistory() }) {
+                            Text("Clear", color = TATBlue, fontSize = 12.sp)
+                        }
+                    }
+                }
+                items(searchHistory, key = { "hist_${it.query}" }) { entry ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { vm.updateQuery(entry.query) }
+                            .focusable()
+                            .padding(horizontal = 16.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            Icons.Default.History,
+                            contentDescription = null,
+                            tint = TATTextSecondary,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(Modifier.width(12.dp))
+                        Text(
+                            entry.query,
+                            modifier = Modifier.weight(1f),
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                        IconButton(
+                            onClick = { vm.deleteSearchHistory(entry.query) },
+                            modifier = Modifier.size(24.dp)
+                        ) {
+                            Icon(
+                                Icons.Default.Close,
+                                contentDescription = "Remove",
+                                tint = TATTextSecondary,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
+                    }
+                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp), color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f))
+                }
             }
 
             if (loading) {

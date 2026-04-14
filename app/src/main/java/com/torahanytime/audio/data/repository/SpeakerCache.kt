@@ -71,4 +71,8 @@ object SpeakerCache {
             it.fullName.contains(query, ignoreCase = true)
         }
     }
+
+    fun getSpeakerById(id: Int): Speaker? {
+        return _speakers.value.values.flatten().find { it.id == id }
+    }
 }

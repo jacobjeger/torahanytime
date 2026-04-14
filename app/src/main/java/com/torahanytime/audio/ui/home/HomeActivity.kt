@@ -27,6 +27,7 @@ import com.torahanytime.audio.data.model.Lecture
 import com.torahanytime.audio.ui.auth.LoginScreen
 import com.torahanytime.audio.ui.browse.*
 import com.torahanytime.audio.ui.library.DownloadsScreen
+import com.torahanytime.audio.ui.library.FavoritesScreen
 import com.torahanytime.audio.ui.library.FollowingScreen
 import com.torahanytime.audio.ui.library.HistoryScreen
 import com.torahanytime.audio.ui.library.LibraryScreen
@@ -183,6 +184,7 @@ fun MainApp() {
                     onNavigateToHistory = { navController.navigate("history") },
                     onNavigateToPlaylists = { navController.navigate("listen_later") },
                     onNavigateToListenLater = { navController.navigate("listen_later") },
+                    onNavigateToFavorites = { navController.navigate("favorites") },
                     onNavigateToFollowing = { navController.navigate("following") },
                     onNavigateToDownloads = { navController.navigate("downloads") },
                     onNavigateToSettings = { navController.navigate("settings") }
@@ -198,6 +200,13 @@ fun MainApp() {
 
             composable("listen_later") {
                 ListenLaterScreen(
+                    onBack = { navController.popBackStack() },
+                    onLectureClick = onLectureClick
+                )
+            }
+
+            composable("favorites") {
+                FavoritesScreen(
                     onBack = { navController.popBackStack() },
                     onLectureClick = onLectureClick
                 )

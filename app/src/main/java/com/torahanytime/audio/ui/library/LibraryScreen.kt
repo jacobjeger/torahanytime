@@ -6,7 +6,13 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.filled.Logout
-import androidx.compose.material.icons.outlined.*
+import androidx.compose.material.icons.outlined.Download
+import androidx.compose.material.icons.outlined.FavoriteBorder
+import androidx.compose.material.icons.outlined.Headphones
+import androidx.compose.material.icons.outlined.History
+import androidx.compose.material.icons.outlined.PersonOutline
+import androidx.compose.material.icons.outlined.QueueMusic
+import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -27,6 +33,7 @@ fun LibraryScreen(
     onNavigateToHistory: () -> Unit = {},
     onNavigateToPlaylists: () -> Unit = {},
     onNavigateToListenLater: () -> Unit = {},
+    onNavigateToFavorites: () -> Unit = {},
     onNavigateToFollowing: () -> Unit = {},
     onNavigateToDownloads: () -> Unit = {},
     onNavigateToSettings: () -> Unit = {}
@@ -107,6 +114,13 @@ fun LibraryScreen(
                 icon = Icons.Outlined.Headphones,
                 label = "Listen Later",
                 onClick = onNavigateToListenLater
+            )
+            HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+
+            LibraryRow(
+                icon = Icons.Outlined.FavoriteBorder,
+                label = "Favorites",
+                onClick = onNavigateToFavorites
             )
             HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
 

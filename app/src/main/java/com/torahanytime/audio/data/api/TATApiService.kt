@@ -105,4 +105,11 @@ interface TATApiService {
         @Query("offset") offset: Int = 0,
         @Query("lecture-details") lectureDetails: Boolean = false
     ): PlaylistsResponse
+
+    // Favorites
+    @POST("users/lectures/favorite")
+    suspend fun favoriteLecture(@Body body: Map<String, Int>): Any
+
+    @POST("users/lectures/unfavorite")
+    suspend fun unfavoriteLecture(@Body body: Map<String, Int>): Any
 }

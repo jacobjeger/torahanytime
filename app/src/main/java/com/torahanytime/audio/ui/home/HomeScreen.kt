@@ -2,6 +2,7 @@ package com.torahanytime.audio.ui.home
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
@@ -18,6 +19,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.torahanytime.audio.data.api.ApiClient
 import com.torahanytime.audio.data.model.Lecture
 import com.torahanytime.audio.data.repository.ContentCache
 import com.torahanytime.audio.data.repository.SpeakerCache
@@ -27,12 +29,54 @@ import com.torahanytime.audio.ui.theme.TATBlue
 import com.torahanytime.audio.ui.theme.TATBrowseAllText
 import com.torahanytime.audio.ui.theme.TATOrange
 import com.torahanytime.audio.ui.theme.TATTextSecondary
+import kotlinx.coroutines.async
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 
 class HomeViewModel : ViewModel() {
+    private val api = ApiClient.api
+
+    private val _newToday = MutableStateFlow<List<Lecture>>(emptyList())
+    val newToday: StateFlow<List<Lecture>> = _newToday
+
+    private val _dafYomi = MutableStateFlow<List<Lecture>>(emptyList())
+    val dafYomi: StateFlow<List<Lecture>> = _dafYomi
+
     init {
         viewModelScope.launch { SpeakerCache.ensureLoaded() }
         viewModelScope.launch { ContentCache.ensureRecentLoaded() }
+        viewModelScope.launch { loadDiscovery() }
+    }
+
+    private suspend fun loadDiscovery() {
+        // Load Daf Yomi and new uploads in parallel
+        viewModelScope.launch {
+            val deferredDaf = async { loadDafYomi() }
+            val deferredNew = async { loadNewToday() }
+            deferredDaf.await()
+            deferredNew.await()
+        }
+    }
+
+    private suspend fun loadDafYomi() {
+        try {
+            val response = api.searchLectures(filter = "Daf Yomi", limit = 5)
+            _dafYomi.value = response.items?.mapNotNull { it.data?.toLecture(it.imgUrl) } ?: emptyList()
+        } catch (_: Exception) {}
+    }
+
+    private suspend fun loadNewToday() {
+        try {
+            // Get recent lectures that were created in the last 48 hours
+            val recent = ContentCache.recentLectures.value
+            if (recent.isNotEmpty()) {
+                // Filter to truly new ones (most recent by dateCreated)
+                _newToday.value = recent
+                    .sortedByDescending { it.dateCreated ?: it.dateRecorded }
+                    .take(10)
+            }
+        } catch (_: Exception) {}
     }
 }
 
@@ -50,6 +94,8 @@ fun HomeScreen(
 ) {
     val lectures by ContentCache.recentLectures.collectAsState()
     val loading by ContentCache.recentLoading.collectAsState()
+    val newToday by vm.newToday.collectAsState()
+    val dafYomi by vm.dafYomi.collectAsState()
 
     Scaffold(
         topBar = {
@@ -136,14 +182,31 @@ fun HomeScreen(
                     }
                 }
 
+                // NEW TODAY section
+                if (newToday.isNotEmpty()) {
+                    item {
+                        SectionHeader("NEW TODAY")
+                    }
+                    items(newToday.take(5), key = { "new_${it.id}" }) { lecture ->
+                        LectureItem(lecture = lecture, onClick = { onLectureClick(lecture) })
+                        HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp), color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f))
+                    }
+                }
+
+                // DAF YOMI section
+                if (dafYomi.isNotEmpty()) {
+                    item {
+                        SectionHeader("DAF YOMI")
+                    }
+                    items(dafYomi, key = { "daf_${it.id}" }) { lecture ->
+                        LectureItem(lecture = lecture, onClick = { onLectureClick(lecture) })
+                        HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp), color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f))
+                    }
+                }
+
                 // Recent Lectures header
                 item {
-                    Text(
-                        "RECENT LECTURES",
-                        style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 1.sp, fontWeight = FontWeight.SemiBold),
-                        color = TATBrowseAllText,
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp)
-                    )
+                    SectionHeader("RECENT LECTURES")
                 }
 
                 items(lectures, key = { it.id }) { lecture ->
@@ -153,4 +216,17 @@ fun HomeScreen(
             }
         }
     }
+}
+
+@Composable
+private fun SectionHeader(title: String) {
+    Text(
+        title,
+        style = MaterialTheme.typography.labelSmall.copy(
+            letterSpacing = 1.sp,
+            fontWeight = FontWeight.SemiBold
+        ),
+        color = TATBrowseAllText,
+        modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp)
+    )
 }
