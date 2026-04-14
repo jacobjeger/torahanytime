@@ -141,7 +141,10 @@ fun MainApp() {
             modifier = Modifier.padding(innerPadding)
         ) {
             composable("home") {
-                HomeScreen(onLectureClick = onLectureClick)
+                HomeScreen(
+                    onLectureClick = onLectureClick,
+                    onSpeakerClick = { id -> navController.navigate("speaker/$id") }
+                )
             }
 
             composable("browse") {

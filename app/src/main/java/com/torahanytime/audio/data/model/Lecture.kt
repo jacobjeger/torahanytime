@@ -64,3 +64,61 @@ data class LecturesResponse(
 data class SeriesLecturesResponse(
     @Json(name = "series_lectures") val seriesLectures: Map<String, Lecture>? = null
 )
+
+@JsonClass(generateAdapter = true)
+data class SearchLectureItem(
+    val id: String? = null,
+    val slug: String? = null,
+    val text: String? = null,
+    @Json(name = "img_url") val imgUrl: String? = null,
+    val data: SearchLectureData? = null
+)
+
+@JsonClass(generateAdapter = true)
+data class SearchLectureData(
+    val id: Int? = null,
+    val title: String? = null,
+    val duration: Int? = null,
+    @Json(name = "date_recorded") val dateRecorded: String? = null,
+    val speaker: Int? = null,
+    @Json(name = "speaker_name_first") val speakerNameFirst: String? = null,
+    @Json(name = "speaker_name_last") val speakerNameLast: String? = null,
+    @Json(name = "language_name") val languageName: String? = null,
+    val language: Int? = null,
+    @Json(name = "mp3_url") val mp3Url: String? = null,
+    @Json(name = "display_active") val displayActive: Boolean? = true,
+    @Json(name = "is_short") val isShort: Boolean? = false,
+    @Json(name = "ladies") val ladies: Boolean? = false,
+    @Json(name = "no_download") val noDownload: Boolean? = null,
+    @Json(name = "on_recent_list") val onRecentList: Boolean? = null,
+    val category: Int? = null,
+    val subcategory: Int? = null
+) {
+    fun toLecture(thumbnailUrl: String? = null): Lecture {
+        return Lecture(
+            id = id ?: 0,
+            title = title ?: "",
+            duration = duration,
+            dateRecorded = dateRecorded,
+            speaker = speaker,
+            speakerNameFirst = speakerNameFirst,
+            speakerNameLast = speakerNameLast,
+            languageName = languageName,
+            mp3Url = mp3Url,
+            thumbnailUrl = thumbnailUrl,
+            displayActive = displayActive,
+            isShort = isShort,
+            ladies = ladies,
+            noDownload = noDownload,
+            category = category,
+            subcategory = subcategory
+        )
+    }
+}
+
+@JsonClass(generateAdapter = true)
+data class SearchLecturesResponse(
+    val count: Int? = null,
+    val total: Int? = null,
+    val items: List<SearchLectureItem>? = null
+)

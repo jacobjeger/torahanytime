@@ -74,4 +74,12 @@ interface TATApiService {
 
     @GET("sponsor-dedications")
     suspend fun getSponsorDedications(): Any
+
+    @GET("search/lectures")
+    suspend fun searchLectures(
+        @Query("filter") filter: String,
+        @Query("limit") limit: Int = 20,
+        @Query("project_id") projectId: Int = 1,
+        @Query("start") start: Int = 0
+    ): SearchLecturesResponse
 }
