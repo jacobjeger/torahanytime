@@ -3,11 +3,13 @@ package com.torahanytime.audio.ui.home
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -85,6 +87,7 @@ fun HomeScreen(
     onNavigateToTopics: (() -> Unit)? = null,
     onNavigateToSeries: (() -> Unit)? = null,
     onNavigateToSearch: (() -> Unit)? = null,
+    onNavigateToParasha: (() -> Unit)? = null,
     vm: HomeViewModel = viewModel()
 ) {
     val lectures by vm.recentLectures.collectAsState()
@@ -108,7 +111,10 @@ fun HomeScreen(
                 }
             }
         } else {
+            val listState = rememberLazyListState()
+            val coroutineScope = rememberCoroutineScope()
             LazyColumn(
+                state = listState,
                 modifier = Modifier.fillMaxSize().padding(padding),
                 contentPadding = PaddingValues(bottom = 16.dp)
             ) {
@@ -127,7 +133,7 @@ fun HomeScreen(
                                 label = "Recent\nLectures",
                                 icon = Icons.Filled.AccessTime,
                                 iconTint = TATBlue,
-                                onClick = { },
+                                onClick = { coroutineScope.launch { listState.animateScrollToItem(4) } },
                                 modifier = Modifier.weight(1f)
                             )
                             CategoryTile(
@@ -174,7 +180,7 @@ fun HomeScreen(
                                 label = "Parashat\nHashavua",
                                 icon = Icons.Filled.MenuBook,
                                 iconTint = TATOrange,
-                                onClick = { onNavigateToTopics?.invoke() },
+                                onClick = { onNavigateToParasha?.invoke() },
                                 modifier = Modifier.weight(1f)
                             )
                         }

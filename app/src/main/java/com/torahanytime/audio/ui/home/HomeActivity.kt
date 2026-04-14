@@ -150,7 +150,8 @@ fun MainApp() {
                     onNavigateToSpeakers = { navController.navigate("speakers") },
                     onNavigateToTopics = { navController.navigate("topics") },
                     onNavigateToSeries = { navController.navigate("series") },
-                    onNavigateToSearch = { navController.navigate("search") }
+                    onNavigateToSearch = { navController.navigate("search") },
+                    onNavigateToParasha = { navController.navigate("topic_lectures/Parasha") }
                 )
             }
 
@@ -158,7 +159,10 @@ fun MainApp() {
                 SearchScreen(
                     onBack = { navController.navigate("home") },
                     onSpeakerClick = { id -> navController.navigate("speaker/$id") },
-                    onTopicClick = { }
+                    onTopicClick = { topic ->
+                        navController.navigate("topic_lectures/${topic.text}")
+                    },
+                    onLectureClick = onLectureClick
                 )
             }
 
@@ -166,7 +170,7 @@ fun MainApp() {
                 LibraryScreen(
                     onNavigateToLogin = { navController.navigate("login") },
                     onNavigateToHistory = { navController.navigate("listen_later") },
-                    onNavigateToPlaylists = { /* TODO: playlists screen */ },
+                    onNavigateToPlaylists = { navController.navigate("listen_later") },
                     onNavigateToListenLater = { navController.navigate("listen_later") },
                     onNavigateToFollowing = { navController.navigate("following") }
                 )
@@ -215,13 +219,28 @@ fun MainApp() {
             composable("topics") {
                 TopicListScreen(
                     onBack = { navController.popBackStack() },
-                    onTopicClick = { /* TODO: navigate to topic lectures */ }
+                    onTopicClick = { topic ->
+                        val name = topic.text
+                        navController.navigate("topic_lectures/$name")
+                    }
                 )
             }
 
             composable("series") {
                 SeriesListScreen(
                     onBack = { navController.popBackStack() }
+                )
+            }
+
+            composable(
+                "topic_lectures/{topicName}",
+                arguments = listOf(navArgument("topicName") { type = NavType.StringType })
+            ) { backStackEntry ->
+                val topicName = backStackEntry.arguments?.getString("topicName") ?: return@composable
+                TopicLecturesScreen(
+                    topicName = topicName,
+                    onBack = { navController.popBackStack() },
+                    onLectureClick = onLectureClick
                 )
             }
 
