@@ -94,15 +94,15 @@ interface TATApiService {
     suspend fun getWatchLater(
         @Query("limit") limit: Int = 1000,
         @Query("offset") offset: Int = 0
-    ): Any
+    ): WatchLaterResponse
 
     @GET("users/follow")
-    suspend fun getFollowedSpeakers(): Any
+    suspend fun getFollowedSpeakers(): FollowingResponse
 
     @GET("playlist")
     suspend fun getPlaylists(
         @Query("limit") limit: Int = 30,
         @Query("offset") offset: Int = 0,
         @Query("lecture-details") lectureDetails: Boolean = false
-    ): Any
+    ): PlaylistsResponse
 }

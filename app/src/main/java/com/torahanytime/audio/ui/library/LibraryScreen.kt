@@ -23,7 +23,11 @@ import com.torahanytime.audio.ui.theme.TATTextSecondary
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LibraryScreen(
-    onNavigateToLogin: () -> Unit
+    onNavigateToLogin: () -> Unit,
+    onNavigateToHistory: () -> Unit = {},
+    onNavigateToPlaylists: () -> Unit = {},
+    onNavigateToListenLater: () -> Unit = {},
+    onNavigateToFollowing: () -> Unit = {}
 ) {
     val isLoggedIn by AuthManager.isLoggedIn.collectAsState()
     val userEmail by AuthManager.userEmail.collectAsState()
@@ -86,21 +90,21 @@ fun LibraryScreen(
             LibraryRow(
                 icon = Icons.Outlined.History,
                 label = "History",
-                onClick = { }
+                onClick = onNavigateToHistory
             )
             HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
 
             LibraryRow(
                 icon = Icons.Outlined.QueueMusic,
                 label = "Playlists",
-                onClick = { }
+                onClick = onNavigateToPlaylists
             )
             HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
 
             LibraryRow(
                 icon = Icons.Outlined.Headphones,
                 label = "Listen Later",
-                onClick = { }
+                onClick = onNavigateToListenLater
             )
 
             if (isLoggedIn) {
@@ -108,7 +112,7 @@ fun LibraryScreen(
                 LibraryRow(
                     icon = Icons.Outlined.PersonOutline,
                     label = "Following",
-                    onClick = { }
+                    onClick = onNavigateToFollowing
                 )
                 HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
 

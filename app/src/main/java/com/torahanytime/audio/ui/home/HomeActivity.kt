@@ -26,7 +26,9 @@ import androidx.navigation.navArgument
 import com.torahanytime.audio.data.model.Lecture
 import com.torahanytime.audio.ui.auth.LoginScreen
 import com.torahanytime.audio.ui.browse.*
+import com.torahanytime.audio.ui.library.FollowingScreen
 import com.torahanytime.audio.ui.library.LibraryScreen
+import com.torahanytime.audio.ui.library.ListenLaterScreen
 import com.torahanytime.audio.ui.player.*
 import com.torahanytime.audio.ui.search.SearchScreen
 import com.torahanytime.audio.ui.theme.TATBlue
@@ -162,7 +164,11 @@ fun MainApp() {
 
             composable("library") {
                 LibraryScreen(
-                    onNavigateToLogin = { navController.navigate("login") }
+                    onNavigateToLogin = { navController.navigate("login") },
+                    onNavigateToHistory = { navController.navigate("listen_later") },
+                    onNavigateToPlaylists = { /* TODO: playlists screen */ },
+                    onNavigateToListenLater = { navController.navigate("listen_later") },
+                    onNavigateToFollowing = { navController.navigate("following") }
                 )
             }
 
@@ -170,6 +176,20 @@ fun MainApp() {
                 LoginScreen(
                     onLoginSuccess = { navController.popBackStack() },
                     onSkip = { navController.popBackStack() }
+                )
+            }
+
+            composable("listen_later") {
+                ListenLaterScreen(
+                    onBack = { navController.popBackStack() },
+                    onLectureClick = onLectureClick
+                )
+            }
+
+            composable("following") {
+                FollowingScreen(
+                    onBack = { navController.popBackStack() },
+                    onSpeakerClick = { id -> navController.navigate("speaker/$id") }
                 )
             }
 
