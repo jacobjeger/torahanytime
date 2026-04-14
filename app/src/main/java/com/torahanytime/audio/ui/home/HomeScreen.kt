@@ -9,7 +9,6 @@ import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -19,62 +18,21 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.torahanytime.audio.data.api.ApiClient
 import com.torahanytime.audio.data.model.Lecture
+import com.torahanytime.audio.data.repository.ContentCache
+import com.torahanytime.audio.data.repository.SpeakerCache
 import com.torahanytime.audio.ui.common.CategoryTile
 import com.torahanytime.audio.ui.common.LectureItem
 import com.torahanytime.audio.ui.theme.TATBlue
 import com.torahanytime.audio.ui.theme.TATBrowseAllText
 import com.torahanytime.audio.ui.theme.TATOrange
 import com.torahanytime.audio.ui.theme.TATTextSecondary
-import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 
 class HomeViewModel : ViewModel() {
-    private val api = ApiClient.api
-
-    private val _recentLectures = MutableStateFlow<List<Lecture>>(emptyList())
-    val recentLectures: StateFlow<List<Lecture>> = _recentLectures
-
-    private val _loading = MutableStateFlow(true)
-    val loading: StateFlow<Boolean> = _loading
-
-    private val _error = MutableStateFlow<String?>(null)
-    val error: StateFlow<String?> = _error
-
-    private val popularSpeakerIds = listOf(162, 287, 386, 61, 166, 289, 1227, 80, 371, 164)
-
-    init { loadHome() }
-
-    fun loadHome() {
-        viewModelScope.launch {
-            _loading.value = true
-            _error.value = null
-            try {
-                val deferredLectures = popularSpeakerIds.map { speakerId ->
-                    async {
-                        try {
-                            api.getSpeakerLectures(speakerId, limit = 8, offset = 0)
-                                .lecture
-                                ?.filter { it.isShort != true && it.displayActive != false }
-                                ?: emptyList()
-                        } catch (_: Exception) { emptyList() }
-                    }
-                }
-                val allLectures = deferredLectures.awaitAll().flatten()
-                    .sortedByDescending { it.dateCreated ?: it.dateRecorded }
-                    .distinctBy { it.id }
-                    .take(30)
-                _recentLectures.value = allLectures
-                if (allLectures.isEmpty()) _error.value = "No lectures found."
-            } catch (e: Exception) {
-                _error.value = "Failed to load. Tap to retry."
-            }
-            _loading.value = false
-        }
+    init {
+        viewModelScope.launch { SpeakerCache.ensureLoaded() }
+        viewModelScope.launch { ContentCache.ensureRecentLoaded() }
     }
 }
 
@@ -90,9 +48,8 @@ fun HomeScreen(
     onNavigateToParasha: (() -> Unit)? = null,
     vm: HomeViewModel = viewModel()
 ) {
-    val lectures by vm.recentLectures.collectAsState()
-    val loading by vm.loading.collectAsState()
-    val error by vm.error.collectAsState()
+    val lectures by ContentCache.recentLectures.collectAsState()
+    val loading by ContentCache.recentLoading.collectAsState()
 
     Scaffold(
         topBar = {
@@ -102,7 +59,7 @@ fun HomeScreen(
             )
         }
     ) { padding ->
-        if (loading) {
+        if (loading && lectures.isEmpty()) {
             Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     CircularProgressIndicator(color = TATBlue)
@@ -113,6 +70,7 @@ fun HomeScreen(
         } else {
             val listState = rememberLazyListState()
             val coroutineScope = rememberCoroutineScope()
+
             LazyColumn(
                 state = listState,
                 modifier = Modifier.fillMaxSize().padding(padding),
@@ -125,10 +83,7 @@ fun HomeScreen(
                             .fillMaxWidth()
                             .padding(horizontal = 12.dp, vertical = 8.dp)
                     ) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(10.dp)
-                        ) {
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                             CategoryTile(
                                 label = "Recent\nLectures",
                                 icon = Icons.Filled.AccessTime,
@@ -145,10 +100,7 @@ fun HomeScreen(
                             )
                         }
                         Spacer(Modifier.height(10.dp))
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(10.dp)
-                        ) {
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                             CategoryTile(
                                 label = "Topics",
                                 icon = Icons.Outlined.BookmarkBorder,
@@ -165,10 +117,7 @@ fun HomeScreen(
                             )
                         }
                         Spacer(Modifier.height(10.dp))
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(10.dp)
-                        ) {
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                             CategoryTile(
                                 label = "Search",
                                 icon = Icons.Filled.Search,
@@ -191,34 +140,15 @@ fun HomeScreen(
                 item {
                     Text(
                         "RECENT LECTURES",
-                        style = MaterialTheme.typography.labelSmall.copy(
-                            letterSpacing = 1.sp, fontWeight = FontWeight.SemiBold
-                        ),
+                        style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 1.sp, fontWeight = FontWeight.SemiBold),
                         color = TATBrowseAllText,
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp)
                     )
                 }
 
-                if (error != null && lectures.isEmpty()) {
-                    item {
-                        Box(Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text(error ?: "", color = TATTextSecondary)
-                                Spacer(Modifier.height(8.dp))
-                                OutlinedButton(onClick = { vm.loadHome() }) {
-                                    Text("Retry", color = TATBlue)
-                                }
-                            }
-                        }
-                    }
-                }
-
                 items(lectures, key = { it.id }) { lecture ->
                     LectureItem(lecture = lecture, onClick = { onLectureClick(lecture) })
-                    HorizontalDivider(
-                        modifier = Modifier.padding(horizontal = 16.dp),
-                        color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
-                    )
+                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp), color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f))
                 }
             }
         }

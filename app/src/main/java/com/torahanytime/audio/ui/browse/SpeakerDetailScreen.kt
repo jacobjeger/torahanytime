@@ -22,7 +22,8 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import com.torahanytime.audio.data.model.Lecture
 import com.torahanytime.audio.data.model.Speaker
-import com.torahanytime.audio.data.repository.LectureRepository
+import com.torahanytime.audio.data.repository.ContentCache
+import com.torahanytime.audio.data.repository.SpeakerCache
 import com.torahanytime.audio.data.repository.SpeakerRepository
 import com.torahanytime.audio.ui.common.LectureItem
 import com.torahanytime.audio.ui.theme.TATBlue
@@ -32,9 +33,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 
 class SpeakerDetailViewModel : ViewModel() {
-    private val speakerRepo = SpeakerRepository()
-    private val lectureRepo = LectureRepository()
-
     private val _speaker = MutableStateFlow<Speaker?>(null)
     val speaker: StateFlow<Speaker?> = _speaker
 
@@ -48,8 +46,11 @@ class SpeakerDetailViewModel : ViewModel() {
         viewModelScope.launch {
             _loading.value = true
             try {
-                _speaker.value = speakerRepo.getSpeakerDetail(speakerId)
-                _lectures.value = lectureRepo.getSpeakerLectures(speakerId)
+                // Try to get speaker from cache first
+                val cached = SpeakerCache.speakers.value.values.flatten().find { it.id == speakerId }
+                _speaker.value = cached
+                // Load lectures from cache
+                _lectures.value = ContentCache.getSpeakerLectures(speakerId)
             } catch (e: Exception) {
                 e.printStackTrace()
             }

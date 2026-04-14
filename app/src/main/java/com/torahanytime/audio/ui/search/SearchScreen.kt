@@ -22,6 +22,7 @@ import com.torahanytime.audio.data.api.ApiClient
 import com.torahanytime.audio.data.model.Lecture
 import com.torahanytime.audio.data.model.Speaker
 import com.torahanytime.audio.data.model.Topic
+import com.torahanytime.audio.data.repository.SpeakerCache
 import com.torahanytime.audio.data.repository.SpeakerRepository
 import com.torahanytime.audio.data.repository.TopicRepository
 import com.torahanytime.audio.ui.common.LectureItem
@@ -73,10 +74,8 @@ class SearchViewModel : ViewModel() {
             try {
                 val deferredSpeakers = async {
                     try {
-                        speakerRepo.getSpeakers(limit = 30)
-                            .speakers.values.flatten()
-                            .filter { it.fullName.contains(q, ignoreCase = true) }
-                            .take(10)
+                        // Use cached speakers for instant results
+                        SpeakerCache.searchSpeakers(q).take(10)
                     } catch (_: Exception) { emptyList() }
                 }
                 val deferredTopics = async {
