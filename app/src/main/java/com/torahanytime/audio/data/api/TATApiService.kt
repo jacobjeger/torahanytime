@@ -82,4 +82,27 @@ interface TATApiService {
         @Query("project_id") projectId: Int = 1,
         @Query("start") start: Int = 0
     ): SearchLecturesResponse
+
+    // Auth
+    @POST("login")
+    suspend fun login(@Body request: LoginRequest): LoginResponse
+
+    @GET("users/profile")
+    suspend fun getUserProfile(): UserProfile
+
+    @GET("lectures/watch-later-with-total")
+    suspend fun getWatchLater(
+        @Query("limit") limit: Int = 1000,
+        @Query("offset") offset: Int = 0
+    ): Any
+
+    @GET("users/follow")
+    suspend fun getFollowedSpeakers(): Any
+
+    @GET("playlist")
+    suspend fun getPlaylists(
+        @Query("limit") limit: Int = 30,
+        @Query("offset") offset: Int = 0,
+        @Query("lecture-details") lectureDetails: Boolean = false
+    ): Any
 }

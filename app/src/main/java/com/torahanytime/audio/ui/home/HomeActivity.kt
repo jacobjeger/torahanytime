@@ -24,6 +24,7 @@ import androidx.navigation.NavType
 import androidx.navigation.compose.*
 import androidx.navigation.navArgument
 import com.torahanytime.audio.data.model.Lecture
+import com.torahanytime.audio.ui.auth.LoginScreen
 import com.torahanytime.audio.ui.browse.*
 import com.torahanytime.audio.ui.library.LibraryScreen
 import com.torahanytime.audio.ui.player.*
@@ -160,7 +161,16 @@ fun MainApp() {
             }
 
             composable("library") {
-                LibraryScreen()
+                LibraryScreen(
+                    onNavigateToLogin = { navController.navigate("login") }
+                )
+            }
+
+            composable("login") {
+                LoginScreen(
+                    onLoginSuccess = { navController.popBackStack() },
+                    onSkip = { navController.popBackStack() }
+                )
             }
 
             composable("speakers") {

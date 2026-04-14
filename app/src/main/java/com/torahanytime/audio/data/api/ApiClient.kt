@@ -1,6 +1,7 @@
 package com.torahanytime.audio.data.api
 
 import com.squareup.moshi.Moshi
+import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
@@ -14,9 +15,23 @@ object ApiClient {
         .add(LenientBooleanAdapter())
         .build()
 
+    private val authInterceptor = Interceptor { chain ->
+        val original = chain.request()
+        val token = AuthManager.getToken()
+        val request = if (token != null) {
+            original.newBuilder()
+                .header("Authorization", "Bearer $token")
+                .build()
+        } else {
+            original
+        }
+        chain.proceed(request)
+    }
+
     private val httpClient = OkHttpClient.Builder()
         .connectTimeout(30, TimeUnit.SECONDS)
         .readTimeout(30, TimeUnit.SECONDS)
+        .addInterceptor(authInterceptor)
         .addInterceptor(HttpLoggingInterceptor().apply {
             level = HttpLoggingInterceptor.Level.BASIC
         })
