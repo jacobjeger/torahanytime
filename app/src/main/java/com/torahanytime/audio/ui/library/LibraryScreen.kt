@@ -27,7 +27,9 @@ fun LibraryScreen(
     onNavigateToHistory: () -> Unit = {},
     onNavigateToPlaylists: () -> Unit = {},
     onNavigateToListenLater: () -> Unit = {},
-    onNavigateToFollowing: () -> Unit = {}
+    onNavigateToFollowing: () -> Unit = {},
+    onNavigateToDownloads: () -> Unit = {},
+    onNavigateToSettings: () -> Unit = {}
 ) {
     val isLoggedIn by AuthManager.isLoggedIn.collectAsState()
     val userEmail by AuthManager.userEmail.collectAsState()
@@ -106,6 +108,13 @@ fun LibraryScreen(
                 label = "Listen Later",
                 onClick = onNavigateToListenLater
             )
+            HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+
+            LibraryRow(
+                icon = Icons.Outlined.Download,
+                label = "Downloads",
+                onClick = onNavigateToDownloads
+            )
 
             if (isLoggedIn) {
                 HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
@@ -115,6 +124,13 @@ fun LibraryScreen(
                     onClick = onNavigateToFollowing
                 )
                 HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+
+                HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                LibraryRow(
+                    icon = Icons.Outlined.Settings,
+                    label = "Settings",
+                    onClick = onNavigateToSettings
+                )
 
                 Spacer(Modifier.weight(1f))
 

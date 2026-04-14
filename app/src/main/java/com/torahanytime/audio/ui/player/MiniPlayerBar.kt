@@ -28,6 +28,7 @@ fun MiniPlayerBar(
     onTogglePlayPause: () -> Unit,
     onClose: () -> Unit,
     onTap: () -> Unit,
+    onSpeedCycle: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val lecture = state.currentLecture ?: return
@@ -84,6 +85,17 @@ fun MiniPlayerBar(
                         color = TATTextSecondary,
                         maxLines = 1
                     )
+                }
+
+                // Speed chip
+                if (state.playbackSpeed != 1f) {
+                    TextButton(
+                        onClick = onSpeedCycle,
+                        modifier = Modifier.focusable(),
+                        contentPadding = PaddingValues(horizontal = 4.dp)
+                    ) {
+                        Text("${state.playbackSpeed}x", color = TATBlue, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    }
                 }
 
                 IconButton(

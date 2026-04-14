@@ -26,9 +26,12 @@ import androidx.navigation.navArgument
 import com.torahanytime.audio.data.model.Lecture
 import com.torahanytime.audio.ui.auth.LoginScreen
 import com.torahanytime.audio.ui.browse.*
+import com.torahanytime.audio.ui.library.DownloadsScreen
 import com.torahanytime.audio.ui.library.FollowingScreen
+import com.torahanytime.audio.ui.library.HistoryScreen
 import com.torahanytime.audio.ui.library.LibraryScreen
 import com.torahanytime.audio.ui.library.ListenLaterScreen
+import com.torahanytime.audio.ui.settings.SettingsScreen
 import com.torahanytime.audio.ui.player.*
 import com.torahanytime.audio.ui.search.SearchScreen
 import com.torahanytime.audio.ui.theme.TATBlue
@@ -74,7 +77,10 @@ fun MainApp() {
             onSeek = playerViewModel::seekTo,
             onSkipForward = playerViewModel::skipForward,
             onSkipBackward = playerViewModel::skipBackward,
-            onSpeedChange = playerViewModel::setPlaybackSpeed
+            onSpeedChange = playerViewModel::setPlaybackSpeed,
+            onSleepTimer = playerViewModel::setSleepTimer,
+            onSleepTimerEndOfLecture = playerViewModel::setSleepTimerEndOfLecture,
+            onCancelSleepTimer = playerViewModel::cancelSleepTimer
         )
         return
     }
@@ -95,7 +101,12 @@ fun MainApp() {
                         state = playerState,
                         onTogglePlayPause = playerViewModel::togglePlayPause,
                         onClose = playerViewModel::stop,
-                        onTap = { showFullPlayer = true }
+                        onTap = { showFullPlayer = true },
+                        onSpeedCycle = {
+                            val speeds = listOf(1f, 1.25f, 1.5f, 1.75f, 2f)
+                            val idx = speeds.indexOf(playerState.playbackSpeed)
+                            playerViewModel.setPlaybackSpeed(speeds[(idx + 1) % speeds.size])
+                        }
                     )
                 }
 
@@ -169,10 +180,12 @@ fun MainApp() {
             composable("library") {
                 LibraryScreen(
                     onNavigateToLogin = { navController.navigate("login") },
-                    onNavigateToHistory = { navController.navigate("listen_later") },
+                    onNavigateToHistory = { navController.navigate("history") },
                     onNavigateToPlaylists = { navController.navigate("listen_later") },
                     onNavigateToListenLater = { navController.navigate("listen_later") },
-                    onNavigateToFollowing = { navController.navigate("following") }
+                    onNavigateToFollowing = { navController.navigate("following") },
+                    onNavigateToDownloads = { navController.navigate("downloads") },
+                    onNavigateToSettings = { navController.navigate("settings") }
                 )
             }
 
@@ -194,6 +207,26 @@ fun MainApp() {
                 FollowingScreen(
                     onBack = { navController.popBackStack() },
                     onSpeakerClick = { id -> navController.navigate("speaker/$id") }
+                )
+            }
+
+            composable("history") {
+                HistoryScreen(
+                    onBack = { navController.popBackStack() },
+                    onLectureClick = onLectureClick
+                )
+            }
+
+            composable("downloads") {
+                DownloadsScreen(
+                    onBack = { navController.popBackStack() },
+                    onLectureClick = onLectureClick
+                )
+            }
+
+            composable("settings") {
+                SettingsScreen(
+                    onBack = { navController.popBackStack() }
                 )
             }
 

@@ -19,6 +19,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.torahanytime.audio.ui.theme.TATBlue
+import com.torahanytime.audio.ui.theme.TATOrange
 import com.torahanytime.audio.ui.theme.TATTextSecondary
 import com.torahanytime.audio.util.formatDuration
 
@@ -31,9 +32,32 @@ fun PlayerScreen(
     onSeek: (Long) -> Unit,
     onSkipForward: () -> Unit,
     onSkipBackward: () -> Unit,
-    onSpeedChange: (Float) -> Unit
+    onSpeedChange: (Float) -> Unit,
+    onSleepTimer: ((Int) -> Unit)? = null,
+    onSleepTimerEndOfLecture: (() -> Unit)? = null,
+    onCancelSleepTimer: (() -> Unit)? = null
 ) {
     val lecture = state.currentLecture ?: return
+    var showSleepTimer by remember { mutableStateOf(false) }
+
+    if (showSleepTimer) {
+        SleepTimerDialog(
+            onDismiss = { showSleepTimer = false },
+            onSelectMinutes = { mins ->
+                onSleepTimer?.invoke(mins)
+                showSleepTimer = false
+            },
+            onSelectEndOfLecture = {
+                onSleepTimerEndOfLecture?.invoke()
+                showSleepTimer = false
+            },
+            onCancel = {
+                onCancelSleepTimer?.invoke()
+                showSleepTimer = false
+            },
+            currentTimerMinutes = state.sleepTimerMinutes
+        )
+    }
 
     Scaffold(
         topBar = {
@@ -183,8 +207,18 @@ fun PlayerScreen(
                     Icon(Icons.Default.Forward10, "Skip forward", modifier = Modifier.size(32.dp))
                 }
 
-                // Placeholder for balance
-                Spacer(Modifier.width(48.dp))
+                // Sleep timer
+                IconButton(
+                    onClick = { showSleepTimer = true },
+                    modifier = Modifier.focusable()
+                ) {
+                    Icon(
+                        Icons.Default.Bedtime,
+                        "Sleep timer",
+                        modifier = Modifier.size(24.dp),
+                        tint = if (state.sleepTimerMinutes != null) TATOrange else TATTextSecondary
+                    )
+                }
             }
         }
     }

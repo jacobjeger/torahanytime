@@ -10,11 +10,16 @@ import androidx.media3.common.Player
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
 import com.google.common.util.concurrent.MoreExecutors
+import com.torahanytime.audio.TATApplication
+import com.torahanytime.audio.data.local.entity.ListeningHistory
+import com.torahanytime.audio.data.local.entity.QueueItem
 import com.torahanytime.audio.data.model.Lecture
 import com.torahanytime.audio.player.AudioPlayerService
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 data class PlayerState(
@@ -22,7 +27,9 @@ data class PlayerState(
     val isPlaying: Boolean = false,
     val currentPosition: Long = 0L,
     val duration: Long = 0L,
-    val playbackSpeed: Float = 1f
+    val playbackSpeed: Float = 1f,
+    val sleepTimerMinutes: Int? = null,
+    val queueSize: Int = 0
 )
 
 class PlayerViewModel(private val context: Context) : ViewModel() {
@@ -31,9 +38,18 @@ class PlayerViewModel(private val context: Context) : ViewModel() {
     val state: StateFlow<PlayerState> = _state
 
     private var mediaController: MediaController? = null
+    private val db = TATApplication.db
+    private var historySaveCounter = 0
+    private var sleepTimerJob: Job? = null
 
     init {
         connectToService()
+        // Observe queue size
+        viewModelScope.launch {
+            db.queueDao().getCount().collect { count ->
+                _state.value = _state.value.copy(queueSize = count)
+            }
+        }
     }
 
     private fun connectToService() {
@@ -44,6 +60,15 @@ class PlayerViewModel(private val context: Context) : ViewModel() {
             mediaController?.addListener(object : Player.Listener {
                 override fun onIsPlayingChanged(isPlaying: Boolean) {
                     _state.value = _state.value.copy(isPlaying = isPlaying)
+                    // Save position when pausing
+                    if (!isPlaying) saveHistory()
+                }
+
+                override fun onPlaybackStateChanged(playbackState: Int) {
+                    if (playbackState == Player.STATE_ENDED) {
+                        saveHistory()
+                        playNextInQueue()
+                    }
                 }
 
                 override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
@@ -58,6 +83,12 @@ class PlayerViewModel(private val context: Context) : ViewModel() {
         viewModelScope.launch {
             while (true) {
                 updatePosition()
+                // Save history every ~10 seconds (20 ticks * 500ms)
+                historySaveCounter++
+                if (historySaveCounter >= 20 && _state.value.isPlaying) {
+                    historySaveCounter = 0
+                    saveHistory()
+                }
                 delay(500)
             }
         }
@@ -69,6 +100,26 @@ class PlayerViewModel(private val context: Context) : ViewModel() {
                 currentPosition = controller.currentPosition.coerceAtLeast(0),
                 duration = controller.duration.coerceAtLeast(0),
                 isPlaying = controller.isPlaying
+            )
+        }
+    }
+
+    private fun saveHistory() {
+        val lecture = _state.value.currentLecture ?: return
+        val position = _state.value.currentPosition
+        viewModelScope.launch {
+            db.historyDao().upsert(
+                ListeningHistory(
+                    lectureId = lecture.id,
+                    title = lecture.title,
+                    speakerName = lecture.speakerFullName,
+                    thumbnailUrl = lecture.thumbnailUrl,
+                    mp3Url = lecture.mp3Url,
+                    duration = lecture.duration ?: 0,
+                    position = position,
+                    languageName = lecture.languageName,
+                    lastPlayedAt = System.currentTimeMillis()
+                )
             )
         }
     }
@@ -86,6 +137,17 @@ class PlayerViewModel(private val context: Context) : ViewModel() {
         mediaController?.apply {
             setMediaItem(mediaItem)
             prepare()
+            // Resume from saved position
+            viewModelScope.launch {
+                val history = db.historyDao().getByLectureId(lecture.id)
+                if (history != null && history.position > 0) {
+                    val dur = (lecture.duration ?: 0) * 1000L
+                    // Only resume if not at the end (>95% complete)
+                    if (dur > 0 && history.position < dur * 0.95) {
+                        seekTo(history.position)
+                    }
+                }
+            }
             play()
         }
     }
@@ -113,12 +175,85 @@ class PlayerViewModel(private val context: Context) : ViewModel() {
         _state.value = _state.value.copy(playbackSpeed = speed)
     }
 
+    // Queue management
+    fun addToQueue(lecture: Lecture) {
+        viewModelScope.launch {
+            val maxPos = db.queueDao().getMaxPosition() ?: -1
+            db.queueDao().insert(
+                QueueItem(
+                    lectureId = lecture.id,
+                    title = lecture.title,
+                    speakerName = lecture.speakerFullName,
+                    thumbnailUrl = lecture.thumbnailUrl,
+                    mp3Url = lecture.mp3Url,
+                    duration = lecture.duration ?: 0,
+                    languageName = lecture.languageName,
+                    position = maxPos + 1
+                )
+            )
+        }
+    }
+
+    private fun playNextInQueue() {
+        viewModelScope.launch {
+            val next = db.queueDao().getNext()
+            if (next != null) {
+                db.queueDao().removeFirst()
+                playLecture(Lecture(
+                    id = next.lectureId,
+                    title = next.title,
+                    speakerNameFirst = next.speakerName.split(" ").firstOrNull(),
+                    speakerNameLast = next.speakerName.split(" ").drop(1).joinToString(" "),
+                    mp3Url = next.mp3Url,
+                    thumbnailUrl = next.thumbnailUrl,
+                    duration = next.duration,
+                    languageName = next.languageName
+                ))
+            }
+        }
+    }
+
+    fun clearQueue() {
+        viewModelScope.launch { db.queueDao().deleteAll() }
+    }
+
+    // Sleep timer
+    fun setSleepTimer(minutes: Int) {
+        sleepTimerJob?.cancel()
+        _state.value = _state.value.copy(sleepTimerMinutes = minutes)
+        sleepTimerJob = viewModelScope.launch {
+            delay(minutes * 60 * 1000L)
+            mediaController?.pause()
+            _state.value = _state.value.copy(sleepTimerMinutes = null)
+        }
+    }
+
+    fun setSleepTimerEndOfLecture() {
+        sleepTimerJob?.cancel()
+        _state.value = _state.value.copy(sleepTimerMinutes = -1) // -1 = end of lecture
+        sleepTimerJob = viewModelScope.launch {
+            // Wait for current lecture to end
+            while (_state.value.isPlaying) {
+                delay(1000)
+            }
+            // Don't play next in queue
+            _state.value = _state.value.copy(sleepTimerMinutes = null)
+        }
+    }
+
+    fun cancelSleepTimer() {
+        sleepTimerJob?.cancel()
+        _state.value = _state.value.copy(sleepTimerMinutes = null)
+    }
+
     fun stop() {
+        saveHistory()
         mediaController?.stop()
         _state.value = PlayerState()
     }
 
     override fun onCleared() {
+        saveHistory()
         mediaController?.release()
         super.onCleared()
     }
