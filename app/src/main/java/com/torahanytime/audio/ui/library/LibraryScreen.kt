@@ -137,15 +137,16 @@ fun LibraryScreen(
                     label = "Following",
                     onClick = onNavigateToFollowing
                 )
-                HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+            }
 
-                HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
-                LibraryRow(
-                    icon = Icons.Outlined.Settings,
-                    label = "Settings",
-                    onClick = onNavigateToSettings
-                )
+            HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+            LibraryRow(
+                icon = Icons.Outlined.Settings,
+                label = "Settings",
+                onClick = onNavigateToSettings
+            )
 
+            if (isLoggedIn) {
                 Spacer(Modifier.weight(1f))
 
                 // Logout button

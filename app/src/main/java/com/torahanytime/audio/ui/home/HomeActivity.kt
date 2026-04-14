@@ -25,7 +25,14 @@ import androidx.navigation.compose.*
 import androidx.navigation.navArgument
 import com.torahanytime.audio.data.model.Lecture
 import com.torahanytime.audio.ui.auth.LoginScreen
-import com.torahanytime.audio.ui.browse.*
+import java.net.URLDecoder
+import java.net.URLEncoder
+import com.torahanytime.audio.ui.browse.SeriesDetailScreen
+import com.torahanytime.audio.ui.browse.SeriesListScreen
+import com.torahanytime.audio.ui.browse.SpeakerDetailScreen
+import com.torahanytime.audio.ui.browse.SpeakerListScreen
+import com.torahanytime.audio.ui.browse.TopicLecturesScreen
+import com.torahanytime.audio.ui.browse.TopicListScreen
 import com.torahanytime.audio.ui.library.DownloadsScreen
 import com.torahanytime.audio.ui.library.FavoritesScreen
 import com.torahanytime.audio.ui.library.FollowingScreen
@@ -173,7 +180,8 @@ fun MainApp() {
                     onBack = { navController.navigate("home") },
                     onSpeakerClick = { id -> navController.navigate("speaker/$id") },
                     onTopicClick = { topic ->
-                        navController.navigate("topic_lectures/${topic.text}")
+                        val encoded = URLEncoder.encode(topic.text, "UTF-8")
+                        navController.navigate("topic_lectures/$encoded")
                     },
                     onLectureClick = onLectureClick
                 )
@@ -263,15 +271,28 @@ fun MainApp() {
                 TopicListScreen(
                     onBack = { navController.popBackStack() },
                     onTopicClick = { topic ->
-                        val name = topic.text
-                        navController.navigate("topic_lectures/$name")
+                        val encoded = URLEncoder.encode(topic.text, "UTF-8")
+                        navController.navigate("topic_lectures/$encoded")
                     }
                 )
             }
 
             composable("series") {
                 SeriesListScreen(
-                    onBack = { navController.popBackStack() }
+                    onBack = { navController.popBackStack() },
+                    onSeriesClick = { id -> navController.navigate("series_detail/$id") }
+                )
+            }
+
+            composable(
+                "series_detail/{seriesId}",
+                arguments = listOf(navArgument("seriesId") { type = NavType.IntType })
+            ) { backStackEntry ->
+                val seriesId = backStackEntry.arguments?.getInt("seriesId") ?: return@composable
+                SeriesDetailScreen(
+                    seriesId = seriesId,
+                    onBack = { navController.popBackStack() },
+                    onLectureClick = onLectureClick
                 )
             }
 
@@ -279,7 +300,8 @@ fun MainApp() {
                 "topic_lectures/{topicName}",
                 arguments = listOf(navArgument("topicName") { type = NavType.StringType })
             ) { backStackEntry ->
-                val topicName = backStackEntry.arguments?.getString("topicName") ?: return@composable
+                val rawName = backStackEntry.arguments?.getString("topicName") ?: return@composable
+                val topicName = URLDecoder.decode(rawName, "UTF-8")
                 TopicLecturesScreen(
                     topicName = topicName,
                     onBack = { navController.popBackStack() },
