@@ -163,7 +163,8 @@ fun MainApp() {
                     onNavigateToTopics = { navController.navigate("topics") },
                     onNavigateToSeries = { navController.navigate("series") },
                     onNavigateToSearch = { navController.navigate("search") },
-                    onNavigateToParasha = { navController.navigate("topic_lectures/Parasha") }
+                    onNavigateToParasha = { navController.navigate("topic_lectures/Parasha") },
+                    onAddToQueue = { lecture -> playerViewModel.addToQueue(lecture) }
                 )
             }
 

@@ -76,10 +76,6 @@ class SearchViewModel : ViewModel() {
         searchJob = viewModelScope.launch {
             delay(300)
             _loading.value = true
-
-            // Save to search history
-            searchHistoryDao.upsert(SearchHistoryEntry(query = q))
-
             try {
                 val deferredSpeakers = async {
                     try {
@@ -99,6 +95,11 @@ class SearchViewModel : ViewModel() {
                 _speakers.value = deferredSpeakers.await()
                 _topics.value = deferredTopics.await()
                 _lectures.value = deferredLectures.await()
+
+                // Only save to history after results are fetched and query is meaningful
+                if (q.length >= 3) {
+                    searchHistoryDao.upsert(SearchHistoryEntry(query = q))
+                }
             } catch (e: Exception) {
                 e.printStackTrace()
             }

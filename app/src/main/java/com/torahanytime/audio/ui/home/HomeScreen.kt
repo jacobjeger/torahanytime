@@ -90,6 +90,7 @@ fun HomeScreen(
     onNavigateToSeries: (() -> Unit)? = null,
     onNavigateToSearch: (() -> Unit)? = null,
     onNavigateToParasha: (() -> Unit)? = null,
+    onAddToQueue: ((Lecture) -> Unit)? = null,
     vm: HomeViewModel = viewModel()
 ) {
     val lectures by ContentCache.recentLectures.collectAsState()
@@ -188,7 +189,11 @@ fun HomeScreen(
                         SectionHeader("NEW TODAY")
                     }
                     items(newToday.take(5), key = { "new_${it.id}" }) { lecture ->
-                        LectureItem(lecture = lecture, onClick = { onLectureClick(lecture) })
+                        LectureItem(
+                        lecture = lecture,
+                        onClick = { onLectureClick(lecture) },
+                        onAddToQueue = onAddToQueue?.let { { it(lecture) } }
+                    )
                         HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp), color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f))
                     }
                 }
@@ -199,7 +204,11 @@ fun HomeScreen(
                         SectionHeader("DAF YOMI")
                     }
                     items(dafYomi, key = { "daf_${it.id}" }) { lecture ->
-                        LectureItem(lecture = lecture, onClick = { onLectureClick(lecture) })
+                        LectureItem(
+                        lecture = lecture,
+                        onClick = { onLectureClick(lecture) },
+                        onAddToQueue = onAddToQueue?.let { { it(lecture) } }
+                    )
                         HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp), color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f))
                     }
                 }
@@ -210,7 +219,11 @@ fun HomeScreen(
                 }
 
                 items(lectures, key = { it.id }) { lecture ->
-                    LectureItem(lecture = lecture, onClick = { onLectureClick(lecture) })
+                    LectureItem(
+                        lecture = lecture,
+                        onClick = { onLectureClick(lecture) },
+                        onAddToQueue = onAddToQueue?.let { { it(lecture) } }
+                    )
                     HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp), color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f))
                 }
             }
