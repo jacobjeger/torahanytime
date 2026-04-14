@@ -46,12 +46,12 @@ class HomeActivity : ComponentActivity() {
 
 sealed class BottomTab(val route: String, val label: String, val icon: ImageVector) {
     data object Home : BottomTab("home", "Home", Icons.Default.Home)
-    data object Browse : BottomTab("browse", "Browse", Icons.Default.Search)
+    data object Search : BottomTab("search", "Search", Icons.Default.Search)
     data object Donate : BottomTab("donate", "Donate", Icons.Default.Favorite)
     data object Library : BottomTab("library", "My TAT", Icons.Default.Person)
 }
 
-private val tabs = listOf(BottomTab.Home, BottomTab.Browse, BottomTab.Donate, BottomTab.Library)
+private val tabs = listOf(BottomTab.Home, BottomTab.Search, BottomTab.Donate, BottomTab.Library)
 
 @Composable
 fun MainApp() {
@@ -143,16 +143,19 @@ fun MainApp() {
             composable("home") {
                 HomeScreen(
                     onLectureClick = onLectureClick,
-                    onSpeakerClick = { id -> navController.navigate("speaker/$id") }
-                )
-            }
-
-            composable("browse") {
-                BrowseScreen(
+                    onSpeakerClick = { id -> navController.navigate("speaker/$id") },
                     onNavigateToSpeakers = { navController.navigate("speakers") },
                     onNavigateToTopics = { navController.navigate("topics") },
                     onNavigateToSeries = { navController.navigate("series") },
                     onNavigateToSearch = { navController.navigate("search") }
+                )
+            }
+
+            composable("search") {
+                SearchScreen(
+                    onBack = { navController.navigate("home") },
+                    onSpeakerClick = { id -> navController.navigate("speaker/$id") },
+                    onTopicClick = { }
                 )
             }
 
@@ -192,13 +195,6 @@ fun MainApp() {
                 )
             }
 
-            composable("search") {
-                SearchScreen(
-                    onBack = { navController.popBackStack() },
-                    onSpeakerClick = { id -> navController.navigate("speaker/$id") },
-                    onTopicClick = { /* TODO */ }
-                )
-            }
         }
     }
 }

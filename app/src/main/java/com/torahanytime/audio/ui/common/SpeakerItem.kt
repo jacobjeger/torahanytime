@@ -60,7 +60,7 @@ fun SpeakerItem(
                 color = if (isFocused) TATBlue else MaterialTheme.colorScheme.onSurface
             )
             Text(
-                text = "${speaker.lectureCount} lectures",
+                text = "${speaker.lectureCount ?: 0} lectures",
                 style = MaterialTheme.typography.bodySmall,
                 color = TATTextSecondary
             )

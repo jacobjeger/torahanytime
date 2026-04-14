@@ -5,7 +5,6 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -96,25 +95,7 @@ fun SearchScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = {},
-                navigationIcon = {
-                    IconButton(onClick = onBack, modifier = Modifier.focusable()) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back")
-                    }
-                },
-                actions = {
-                    OutlinedTextField(
-                        value = query,
-                        onValueChange = { vm.updateQuery(it) },
-                        placeholder = { Text("Search classes\u2026", fontSize = 14.sp) },
-                        modifier = Modifier
-                            .weight(1f)
-                            .padding(end = 16.dp)
-                            .focusRequester(focusRequester),
-                        singleLine = true,
-                        shape = MaterialTheme.shapes.medium
-                    )
-                },
+                title = { Text("Search", fontWeight = FontWeight.Bold) },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.surface
                 )
@@ -127,6 +108,19 @@ fun SearchScreen(
             }
         } else {
             LazyColumn(modifier = Modifier.fillMaxSize().padding(padding)) {
+                item {
+                    OutlinedTextField(
+                        value = query,
+                        onValueChange = { vm.updateQuery(it) },
+                        placeholder = { Text("Search your next Torah class\u2026", fontSize = 14.sp) },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 8.dp)
+                            .focusRequester(focusRequester),
+                        singleLine = true,
+                        shape = MaterialTheme.shapes.medium
+                    )
+                }
                 if (speakers.isNotEmpty()) {
                     item {
                         Text(

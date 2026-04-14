@@ -11,6 +11,7 @@ object ApiClient {
     private const val BASE_URL = "https://api.torahanytime.com/"
 
     private val moshi = Moshi.Builder()
+        .add(LenientBooleanAdapter())
         .build()
 
     private val httpClient = OkHttpClient.Builder()
