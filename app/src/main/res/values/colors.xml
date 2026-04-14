@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="tat_blue">#1B6FA8</color>
+    <color name="tat_orange">#E8762D</color>
+    <color name="tat_white">#FFFFFF</color>
+    <color name="tat_bg_light">#F5F7FA</color>
+    <color name="tat_text_primary">#1A1A1A</color>
+    <color name="tat_text_secondary">#6B7280</color>
+    <color name="tat_divider">#E5E7EB</color>
+</resources>

@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">TorahAnytime</string>
+    <string name="tab_home">Home</string>
+    <string name="tab_browse">Browse</string>
+    <string name="tab_donate">Donate</string>
+    <string name="tab_library">My TAT</string>
+    <string name="search_hint">Search your next Torah class\u2026</string>
+</resources>
