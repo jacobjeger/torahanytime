@@ -18,9 +18,11 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.torahanytime.audio.data.model.Speaker
 import com.torahanytime.audio.data.repository.SpeakerCache
+import com.torahanytime.audio.ui.common.ErrorRetryState
 import com.torahanytime.audio.ui.common.SpeakerItem
 import com.torahanytime.audio.ui.theme.TATBlue
 import kotlinx.coroutines.launch
+import androidx.compose.runtime.rememberCoroutineScope
 
 class SpeakerListViewModel : ViewModel() {
     init {
@@ -38,6 +40,8 @@ fun SpeakerListScreen(
     val speakers by SpeakerCache.speakers.collectAsState()
     val loading by SpeakerCache.loading.collectAsState()
     val totalCount by SpeakerCache.totalCount.collectAsState()
+    val error by SpeakerCache.error.collectAsState()
+    val scope = rememberCoroutineScope()
 
     Scaffold(
         topBar = {
@@ -64,6 +68,15 @@ fun SpeakerListScreen(
             Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
                 CircularProgressIndicator(color = TATBlue)
             }
+        } else if (speakers.isEmpty() && error != null) {
+            ErrorRetryState(
+                message = error ?: "Something went wrong",
+                onRetry = {
+                    SpeakerCache.retry()
+                    scope.launch { SpeakerCache.ensureLoaded() }
+                },
+                modifier = Modifier.padding(padding)
+            )
         } else {
             LazyColumn(modifier = Modifier.fillMaxSize().padding(padding)) {
                 speakers.forEach { (letter, speakerList) ->

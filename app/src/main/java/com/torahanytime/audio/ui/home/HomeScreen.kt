@@ -5,6 +5,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.*
@@ -19,23 +20,32 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.torahanytime.audio.TATApplication
 import com.torahanytime.audio.data.api.ApiClient
+import com.torahanytime.audio.data.api.AuthManager
+import com.torahanytime.audio.data.local.entity.ListeningHistory
 import com.torahanytime.audio.data.model.Lecture
 import com.torahanytime.audio.data.repository.ContentCache
 import com.torahanytime.audio.data.repository.SpeakerCache
+import java.text.SimpleDateFormat
+import java.util.Calendar
+import java.util.Locale
 import com.torahanytime.audio.ui.common.CategoryTile
+import com.torahanytime.audio.ui.common.ErrorRetryState
 import com.torahanytime.audio.ui.common.LectureItem
 import com.torahanytime.audio.ui.theme.TATBlue
 import com.torahanytime.audio.ui.theme.TATBrowseAllText
 import com.torahanytime.audio.ui.theme.TATOrange
 import com.torahanytime.audio.ui.theme.TATTextSecondary
 import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 
 class HomeViewModel : ViewModel() {
     private val api = ApiClient.api
+    private val historyDao = TATApplication.db.historyDao()
 
     private val _newToday = MutableStateFlow<List<Lecture>>(emptyList())
     val newToday: StateFlow<List<Lecture>> = _newToday
@@ -43,19 +53,41 @@ class HomeViewModel : ViewModel() {
     private val _dafYomi = MutableStateFlow<List<Lecture>>(emptyList())
     val dafYomi: StateFlow<List<Lecture>> = _dafYomi
 
+    private val _continueListening = MutableStateFlow<List<ListeningHistory>>(emptyList())
+    val continueListening: StateFlow<List<ListeningHistory>> = _continueListening
+
+    private val _trending = MutableStateFlow<List<Lecture>>(emptyList())
+    val trending: StateFlow<List<Lecture>> = _trending
+
+    private val _followedSpeakerLectures = MutableStateFlow<List<Lecture>>(emptyList())
+    val followedSpeakerLectures: StateFlow<List<Lecture>> = _followedSpeakerLectures
+
     init {
         viewModelScope.launch { SpeakerCache.ensureLoaded() }
         viewModelScope.launch { ContentCache.ensureRecentLoaded() }
         viewModelScope.launch { loadDiscovery() }
+        // Observe continue listening
+        viewModelScope.launch {
+            historyDao.getRecent(10).collect { history ->
+                _continueListening.value = history.filter { entry ->
+                    entry.position > 0 &&
+                    entry.duration > 0 &&
+                    entry.position < entry.duration * 1000L * 0.95
+                }.take(5)
+            }
+        }
     }
 
-    private suspend fun loadDiscovery() {
-        // Load Daf Yomi and new uploads in parallel
+    suspend fun loadDiscovery() {
         viewModelScope.launch {
             val deferredDaf = async { loadDafYomi() }
             val deferredNew = async { loadNewToday() }
+            val deferredTrending = async { loadTrending() }
+            val deferredFollowed = async { loadFollowedContent() }
             deferredDaf.await()
             deferredNew.await()
+            deferredTrending.await()
+            deferredFollowed.await()
         }
     }
 
@@ -68,13 +100,62 @@ class HomeViewModel : ViewModel() {
 
     private suspend fun loadNewToday() {
         try {
-            // Get recent lectures that were created in the last 48 hours
             val recent = ContentCache.recentLectures.value
             if (recent.isNotEmpty()) {
-                // Filter to truly new ones (most recent by dateCreated)
                 _newToday.value = recent
                     .sortedByDescending { it.dateCreated ?: it.dateRecorded }
                     .take(10)
+            }
+        } catch (_: Exception) {}
+    }
+
+    private suspend fun loadTrending() {
+        try {
+            val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US)
+            val now = Calendar.getInstance()
+            val endTime = dateFormat.format(now.time)
+            now.add(Calendar.DAY_OF_YEAR, -7)
+            val startTime = dateFormat.format(now.time)
+
+            val pins = api.getPinnedContent(
+                endTimeGte = endTime,
+                startTimeLte = startTime,
+                limit = 10
+            )
+            val lectures = pins.flatMap { it.lectures ?: emptyList() }
+                .distinctBy { it.id }
+                .take(5)
+            if (lectures.isNotEmpty()) {
+                _trending.value = lectures
+            }
+        } catch (_: Exception) {
+            // Fallback: use most recent lectures as "trending"
+        }
+    }
+
+    private suspend fun loadFollowedContent() {
+        if (AuthManager.getToken() == null) return
+        try {
+            val following = api.getFollowedSpeakers()
+            val speakerIds = following.speakers?.values?.mapNotNull { it.id }?.take(10) ?: return
+            if (speakerIds.isEmpty()) return
+
+            coroutineScope {
+                val allLectures = speakerIds.map { id ->
+                    async {
+                        try {
+                            api.getSpeakerLectures(id, limit = 3, offset = 0)
+                                .lecture
+                                ?.filter { it.isShort != true && it.displayActive != false }
+                                ?: emptyList()
+                        } catch (_: Exception) { emptyList<Lecture>() }
+                    }
+                }.map { it.await() }.flatten()
+                    .distinctBy { it.id }
+                    .sortedByDescending { it.dateCreated ?: it.dateRecorded }
+                    .take(10)
+
+                _followedSpeakerLectures.value = allLectures
             }
         } catch (_: Exception) {}
     }
@@ -95,8 +176,13 @@ fun HomeScreen(
 ) {
     val lectures by ContentCache.recentLectures.collectAsState()
     val loading by ContentCache.recentLoading.collectAsState()
+    val contentError by ContentCache.error.collectAsState()
+    val scope = rememberCoroutineScope()
     val newToday by vm.newToday.collectAsState()
     val dafYomi by vm.dafYomi.collectAsState()
+    val continueListening by vm.continueListening.collectAsState()
+    val trending by vm.trending.collectAsState()
+    val followedLectures by vm.followedSpeakerLectures.collectAsState()
 
     Scaffold(
         topBar = {
@@ -114,10 +200,33 @@ fun HomeScreen(
                     Text("Loading shiurim\u2026", color = TATTextSecondary, fontSize = 13.sp)
                 }
             }
+        } else if (contentError != null && lectures.isEmpty()) {
+            ErrorRetryState(
+                message = contentError ?: "Something went wrong",
+                onRetry = {
+                    ContentCache.retryRecent()
+                    scope.launch { ContentCache.ensureRecentLoaded() }
+                },
+                modifier = Modifier.padding(padding)
+            )
         } else {
             val listState = rememberLazyListState()
             val coroutineScope = rememberCoroutineScope()
+            var isRefreshing by remember { mutableStateOf(false) }
 
+            PullToRefreshBox(
+                isRefreshing = isRefreshing,
+                onRefresh = {
+                    isRefreshing = true
+                    ContentCache.retryRecent()
+                    coroutineScope.launch {
+                        ContentCache.ensureRecentLoaded()
+                        vm.loadDiscovery()
+                        isRefreshing = false
+                    }
+                },
+                modifier = Modifier.fillMaxSize()
+            ) {
             LazyColumn(
                 state = listState,
                 modifier = Modifier.fillMaxSize().padding(padding),
@@ -183,6 +292,76 @@ fun HomeScreen(
                     }
                 }
 
+                // FROM SPEAKERS YOU FOLLOW section (only when logged in)
+                if (followedLectures.isNotEmpty()) {
+                    item {
+                        SectionHeader("FROM SPEAKERS YOU FOLLOW")
+                    }
+                    items(followedLectures, key = { "followed_${it.id}" }) { lecture ->
+                        LectureItem(
+                            lecture = lecture,
+                            onClick = { onLectureClick(lecture) },
+                            onAddToQueue = onAddToQueue?.let { { it(lecture) } }
+                        )
+                        HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp), color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f))
+                    }
+                }
+
+                // CONTINUE LISTENING section
+                if (continueListening.isNotEmpty()) {
+                    item {
+                        SectionHeader("CONTINUE LISTENING")
+                    }
+                    items(continueListening, key = { "continue_${it.lectureId}" }) { history ->
+                        val lecture = Lecture(
+                            id = history.lectureId,
+                            title = history.title,
+                            speakerNameFirst = history.speakerName.split(" ").firstOrNull(),
+                            speakerNameLast = history.speakerName.split(" ").drop(1).joinToString(" "),
+                            mp3Url = history.mp3Url,
+                            thumbnailUrl = history.thumbnailUrl,
+                            duration = history.duration,
+                            languageName = history.languageName
+                        )
+                        Column {
+                            LectureItem(
+                                lecture = lecture,
+                                onClick = { onLectureClick(lecture) },
+                                onAddToQueue = onAddToQueue?.let { { it(lecture) } }
+                            )
+                            // Progress bar showing how far they got
+                            val progressFraction = if (history.duration > 0) {
+                                (history.position.toFloat() / (history.duration * 1000f)).coerceIn(0f, 1f)
+                            } else 0f
+                            LinearProgressIndicator(
+                                progress = { progressFraction },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 16.dp)
+                                    .height(3.dp),
+                                color = TATBlue,
+                                trackColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)
+                            )
+                        }
+                        HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp), color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f))
+                    }
+                }
+
+                // TRENDING section
+                if (trending.isNotEmpty()) {
+                    item {
+                        SectionHeader("TRENDING")
+                    }
+                    items(trending, key = { "trend_${it.id}" }) { lecture ->
+                        LectureItem(
+                            lecture = lecture,
+                            onClick = { onLectureClick(lecture) },
+                            onAddToQueue = onAddToQueue?.let { { it(lecture) } }
+                        )
+                        HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp), color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f))
+                    }
+                }
+
                 // NEW TODAY section
                 if (newToday.isNotEmpty()) {
                     item {
@@ -226,6 +405,7 @@ fun HomeScreen(
                     )
                     HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp), color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f))
                 }
+            }
             }
         }
     }

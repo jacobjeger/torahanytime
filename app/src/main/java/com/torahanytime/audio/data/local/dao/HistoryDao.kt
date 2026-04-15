@@ -15,6 +15,9 @@ interface HistoryDao {
     @Query("SELECT * FROM listening_history WHERE lectureId = :lectureId")
     suspend fun getByLectureId(lectureId: Int): ListeningHistory?
 
+    @Query("SELECT * FROM listening_history WHERE lectureId = :lectureId")
+    fun getByLectureIdFlow(lectureId: Int): Flow<ListeningHistory?>
+
     @Upsert
     suspend fun upsert(entry: ListeningHistory)
 

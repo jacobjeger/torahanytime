@@ -26,6 +26,11 @@ interface TATApiService {
         @Query("offset") offset: Int = 0
     ): LecturesResponse
 
+    @GET("topics")
+    suspend fun getAllTopics(
+        @Query("project_id") projectId: Int = 1
+    ): AllTopicsResponse
+
     @GET("search/topics")
     suspend fun searchTopics(
         @Query("filter") filter: String,
@@ -112,4 +117,11 @@ interface TATApiService {
 
     @POST("users/lectures/unfavorite")
     suspend fun unfavoriteLecture(@Body body: Map<String, Int>): Any
+
+    // Follow/Unfollow speakers
+    @POST("users/follow")
+    suspend fun followSpeaker(@Body body: Map<String, Int>): Any
+
+    @POST("users/unfollow")
+    suspend fun unfollowSpeaker(@Body body: Map<String, Int>): Any
 }

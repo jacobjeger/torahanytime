@@ -3,6 +3,7 @@ package com.torahanytime.audio.ui.player
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -14,6 +15,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -33,8 +35,22 @@ fun MiniPlayerBar(
 ) {
     val lecture = state.currentLecture ?: return
 
+    var cumulativeDrag = 0f
+
     Surface(
-        modifier = modifier.fillMaxWidth(),
+        modifier = modifier
+            .fillMaxWidth()
+            .pointerInput(Unit) {
+                detectVerticalDragGestures(
+                    onDragStart = { cumulativeDrag = 0f },
+                    onVerticalDrag = { _, dragAmount ->
+                        cumulativeDrag += dragAmount
+                        if (cumulativeDrag < -50f) {
+                            onTap()
+                        }
+                    }
+                )
+            },
         shadowElevation = 8.dp,
         color = MaterialTheme.colorScheme.surface
     ) {

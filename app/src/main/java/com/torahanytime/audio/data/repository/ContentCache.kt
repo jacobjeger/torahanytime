@@ -25,6 +25,9 @@ object ContentCache {
     private val _recentLoading = MutableStateFlow(false)
     val recentLoading: StateFlow<Boolean> = _recentLoading
 
+    private val _error = MutableStateFlow<String?>(null)
+    val error: StateFlow<String?> = _error
+
     // Per-speaker lecture cache
     private val speakerLecturesCache = mutableMapOf<Int, List<Lecture>>()
     private val speakerLecturesMutex = Mutex()
@@ -42,8 +45,13 @@ object ContentCache {
         loadRecent()
     }
 
+    fun retryRecent() {
+        recentLoaded = false
+    }
+
     private suspend fun loadRecent() {
         _recentLoading.value = true
+        _error.value = null
         try {
             coroutineScope {
                 val deferredLectures = popularSpeakerIds.map { speakerId ->
@@ -68,7 +76,7 @@ object ContentCache {
                 _recentLectures.value = allLectures
             }
         } catch (e: Exception) {
-            e.printStackTrace()
+            _error.value = "Failed to load lectures"
         }
         _recentLoading.value = false
     }

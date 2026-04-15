@@ -8,6 +8,8 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -25,6 +27,10 @@ import com.torahanytime.audio.data.model.Lecture
 import com.torahanytime.audio.ui.theme.TATBlue
 import com.torahanytime.audio.ui.theme.TATTextSecondary
 import com.torahanytime.audio.util.formatDuration
+import kotlinx.coroutines.launch
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.foundation.background
+import androidx.compose.ui.graphics.Color
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -33,6 +39,8 @@ fun HistoryScreen(
     onLectureClick: (Lecture) -> Unit
 ) {
     val history by TATApplication.db.historyDao().getAll().collectAsState(initial = emptyList())
+    val scope = rememberCoroutineScope()
+    var showClearConfirm by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
@@ -42,10 +50,37 @@ fun HistoryScreen(
                     IconButton(onClick = onBack, modifier = Modifier.focusable()) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back")
                     }
+                },
+                actions = {
+                    if (history.isNotEmpty()) {
+                        TextButton(
+                            onClick = { showClearConfirm = true },
+                            modifier = Modifier.focusable()
+                        ) {
+                            Text("Clear All", color = TATBlue, fontSize = 12.sp)
+                        }
+                    }
                 }
             )
         }
     ) { padding ->
+
+        if (showClearConfirm) {
+            AlertDialog(
+                onDismissRequest = { showClearConfirm = false },
+                title = { Text("Clear History") },
+                text = { Text("Remove all listening history?") },
+                confirmButton = {
+                    TextButton(onClick = {
+                        scope.launch { TATApplication.db.historyDao().deleteAll() }
+                        showClearConfirm = false
+                    }) { Text("Clear", color = Color.Red) }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showClearConfirm = false }) { Text("Cancel") }
+                }
+            )
+        }
         if (history.isEmpty()) {
             Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
                 Text("No listening history yet", color = TATTextSecondary)
@@ -53,18 +88,50 @@ fun HistoryScreen(
         } else {
             LazyColumn(modifier = Modifier.fillMaxSize().padding(padding)) {
                 items(history, key = { it.lectureId }) { entry ->
-                    HistoryItem(entry = entry, onClick = {
-                        onLectureClick(Lecture(
-                            id = entry.lectureId,
-                            title = entry.title,
-                            speakerNameFirst = entry.speakerName.split(" ").firstOrNull(),
-                            speakerNameLast = entry.speakerName.split(" ").drop(1).joinToString(" "),
-                            mp3Url = entry.mp3Url,
-                            thumbnailUrl = entry.thumbnailUrl,
-                            duration = entry.duration,
-                            languageName = entry.languageName
-                        ))
-                    })
+                    val dismissState = rememberSwipeToDismissBoxState(
+                        confirmValueChange = { value ->
+                            if (value == SwipeToDismissBoxValue.EndToStart) {
+                                scope.launch { TATApplication.db.historyDao().delete(entry.lectureId) }
+                                true
+                            } else false
+                        }
+                    )
+                    SwipeToDismissBox(
+                        state = dismissState,
+                        backgroundContent = {
+                            val color by animateColorAsState(
+                                if (dismissState.dismissDirection == SwipeToDismissBoxValue.EndToStart)
+                                    Color.Red.copy(alpha = 0.15f)
+                                else Color.Transparent,
+                                label = "swipeBg"
+                            )
+                            Box(
+                                modifier = Modifier.fillMaxSize().background(color).padding(horizontal = 20.dp),
+                                contentAlignment = Alignment.CenterEnd
+                            ) {
+                                Icon(Icons.Default.Delete, "Remove", tint = Color.Red.copy(alpha = 0.7f))
+                            }
+                        },
+                        enableDismissFromStartToEnd = false,
+                        enableDismissFromEndToStart = true
+                    ) {
+                        HistoryItem(
+                            entry = entry,
+                            onClick = {
+                                onLectureClick(Lecture(
+                                    id = entry.lectureId,
+                                    title = entry.title,
+                                    speakerNameFirst = entry.speakerName.split(" ").firstOrNull(),
+                                    speakerNameLast = entry.speakerName.split(" ").drop(1).joinToString(" "),
+                                    mp3Url = entry.mp3Url,
+                                    thumbnailUrl = entry.thumbnailUrl,
+                                    duration = entry.duration,
+                                    languageName = entry.languageName
+                                ))
+                            },
+                            onDelete = { scope.launch { TATApplication.db.historyDao().delete(entry.lectureId) } }
+                        )
+                    }
                     HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp), color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f))
                 }
             }
@@ -73,10 +140,11 @@ fun HistoryScreen(
 }
 
 @Composable
-private fun HistoryItem(entry: ListeningHistory, onClick: () -> Unit) {
+private fun HistoryItem(entry: ListeningHistory, onClick: () -> Unit, onDelete: () -> Unit = {}) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .background(MaterialTheme.colorScheme.surface)
             .focusable()
             .clickable(onClick = onClick)
             .padding(horizontal = 16.dp, vertical = 10.dp),
@@ -106,6 +174,12 @@ private fun HistoryItem(entry: ListeningHistory, onClick: () -> Unit) {
                     trackColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)
                 )
             }
+        }
+        IconButton(
+            onClick = onDelete,
+            modifier = Modifier.size(32.dp).focusable()
+        ) {
+            Icon(Icons.Default.Close, "Remove", tint = TATTextSecondary, modifier = Modifier.size(16.dp))
         }
     }
 }

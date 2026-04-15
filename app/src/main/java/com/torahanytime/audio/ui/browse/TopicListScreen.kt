@@ -5,6 +5,7 @@ import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.*
@@ -18,9 +19,11 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.torahanytime.audio.data.api.ApiClient
 import com.torahanytime.audio.data.model.Topic
 import com.torahanytime.audio.data.model.TopicData
-import com.torahanytime.audio.data.repository.TopicRepository
+import com.torahanytime.audio.ui.common.InfiniteScrollHandler
+import com.torahanytime.audio.ui.common.PaginationLoadingItem
 import com.torahanytime.audio.ui.theme.TATBlue
 import com.torahanytime.audio.ui.theme.TATBrowseAllText
 import com.torahanytime.audio.ui.theme.TATTextSecondary
@@ -47,45 +50,77 @@ private val mainTopics = listOf(
 )
 
 class TopicListViewModel : ViewModel() {
-    private val repo = TopicRepository()
+    private val api = ApiClient.api
 
     private val _topics = MutableStateFlow<List<Topic>>(mainTopics)
     val topics: StateFlow<List<Topic>> = _topics
 
-    private val _loading = MutableStateFlow(false)
+    // All topics loaded from API (cached for when search is cleared)
+    private var allTopics: List<Topic> = mainTopics
+
+    private val _loading = MutableStateFlow(true)
     val loading: StateFlow<Boolean> = _loading
+
+    // No pagination needed - we load all topics at once from /topics
+    private val _loadingMore = MutableStateFlow(false)
+    val loadingMore: StateFlow<Boolean> = _loadingMore
+
+    private val _hasMore = MutableStateFlow(false)
+    val hasMore: StateFlow<Boolean> = _hasMore
 
     private val _query = MutableStateFlow("")
     val query: StateFlow<String> = _query
 
-    private val _isSearching = MutableStateFlow(false)
-    val isSearching: StateFlow<Boolean> = _isSearching
-
     private var searchJob: Job? = null
+
+    init {
+        loadAllTopics()
+    }
+
+    private fun loadAllTopics() {
+        viewModelScope.launch {
+            _loading.value = true
+            try {
+                val response = api.getAllTopics()
+                val flatList = mutableListOf<Topic>()
+                for (category in response.topics) {
+                    if (!category.displayActive) continue
+                    flatList.add(category.toTopic())
+                    for (sub in category.subCategories) {
+                        if (!sub.displayActive) continue
+                        flatList.add(sub.toTopic())
+                    }
+                }
+                // Sort by lecture count descending
+                allTopics = flatList.sortedByDescending { it.data?.lectureCount ?: 0 }
+                _topics.value = allTopics
+            } catch (_: Exception) {
+                // Fallback to hardcoded main topics
+                allTopics = mainTopics
+                _topics.value = mainTopics
+            }
+            _loading.value = false
+        }
+    }
 
     fun search(q: String) {
         _query.value = q
         searchJob?.cancel()
         if (q.isBlank()) {
-            _topics.value = mainTopics
-            _isSearching.value = false
+            _topics.value = allTopics
             return
         }
-        _isSearching.value = true
+        // Filter locally from the full list
         searchJob = viewModelScope.launch {
-            delay(300)
-            _loading.value = true
-            try {
-                val results = repo.searchTopics(q)
-                _topics.value = if (results.isNotEmpty()) results else mainTopics.filter {
-                    it.text.contains(q, ignoreCase = true)
-                }
-            } catch (e: Exception) {
-                _topics.value = mainTopics.filter { it.text.contains(q, ignoreCase = true) }
+            delay(200)
+            _topics.value = allTopics.filter {
+                it.text.contains(q, ignoreCase = true)
             }
-            _loading.value = false
         }
     }
+
+    // No-op since all topics are loaded at once
+    fun loadMore() {}
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -97,7 +132,17 @@ fun TopicListScreen(
 ) {
     val topics by vm.topics.collectAsState()
     val loading by vm.loading.collectAsState()
+    val loadingMore by vm.loadingMore.collectAsState()
+    val hasMore by vm.hasMore.collectAsState()
     val query by vm.query.collectAsState()
+    val listState = rememberLazyListState()
+
+    InfiniteScrollHandler(
+        listState = listState,
+        isLoadingMore = loadingMore,
+        hasMorePages = hasMore,
+        onLoadMore = { vm.loadMore() }
+    )
 
     Scaffold(
         topBar = {
@@ -130,13 +175,16 @@ fun TopicListScreen(
                 }
             }
 
-            LazyColumn {
+            LazyColumn(state = listState) {
                 items(topics, key = { it.id }) { topic ->
                     TopicRow(topic = topic, onClick = { onTopicClick(topic) })
                     HorizontalDivider(
                         modifier = Modifier.padding(horizontal = 16.dp),
                         color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
                     )
+                }
+                if (loadingMore) {
+                    item { PaginationLoadingItem() }
                 }
             }
         }

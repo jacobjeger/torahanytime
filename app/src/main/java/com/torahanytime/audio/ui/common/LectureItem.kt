@@ -4,12 +4,15 @@ import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.QueueMusic
+import androidx.compose.material.icons.outlined.CloudDownload
 import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -18,18 +21,27 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
+import android.view.HapticFeedbackConstants
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import com.torahanytime.audio.data.download.LectureDownloader
+import com.torahanytime.audio.data.local.entity.ListeningHistory
 import com.torahanytime.audio.data.model.Lecture
 import com.torahanytime.audio.data.repository.FavoriteRepository
 import com.torahanytime.audio.data.repository.SpeakerCache
+import com.torahanytime.audio.TATApplication
 import com.torahanytime.audio.ui.theme.TATBlue
 import com.torahanytime.audio.ui.theme.TATOrange
 import com.torahanytime.audio.ui.theme.TATTextSecondary
+import com.torahanytime.audio.util.formatDuration
+import com.torahanytime.audio.util.formatRelativeDate
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -58,12 +70,12 @@ fun LectureItem(
             confirmValueChange = { value ->
                 when (value) {
                     SwipeToDismissBoxValue.StartToEnd -> {
-                        // Swipe right → toggle favorite
+                        // Swipe right -> toggle favorite
                         scope.launch { FavoriteRepository.toggleFavorite(lecture) }
                         false // don't actually dismiss
                     }
                     SwipeToDismissBoxValue.EndToStart -> {
-                        // Swipe left → add to queue
+                        // Swipe left -> add to queue
                         onAddToQueue()
                         false // don't actually dismiss
                     }
@@ -159,6 +171,30 @@ private fun LectureItemContent(
     speakerPhotoUrl: String?,
     onToggleFavorite: () -> Unit
 ) {
+    val context = LocalContext.current
+    val view = LocalView.current
+    val scope = rememberCoroutineScope()
+    var showContextMenu by remember { mutableStateOf(false) }
+    // Resume position from history
+    val historyEntry by remember(lecture.id) {
+        TATApplication.db.historyDao().getByLectureIdFlow(lecture.id)
+    }.collectAsState(initial = null)
+    val isDownloaded by TATApplication.db.downloadDao().isDownloaded(lecture.id).collectAsState(initial = false)
+    val downloadProgress by LectureDownloader.downloadProgress.collectAsState()
+    val progress = downloadProgress[lecture.id]
+    val isDownloading = progress != null && progress in 0f..0.99f
+    val isRetrying = progress == -2f // retrying with backoff
+    val isFailed = progress == -1f
+
+    if (showContextMenu) {
+        LectureContextMenu(
+            lecture = lecture,
+            isFavorite = isFavorite,
+            onDismiss = { showContextMenu = false },
+            onPlay = onClick
+        )
+    }
+
     Row(
         modifier = modifier
             .fillMaxWidth()
@@ -166,6 +202,14 @@ private fun LectureItemContent(
             .onFocusChanged { onFocusChanged(it.isFocused) }
             .focusable()
             .clickable(onClick = onClick)
+            .pointerInput(Unit) {
+                detectTapGestures(
+                    onLongPress = {
+                        view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+                        showContextMenu = true
+                    }
+                )
+            }
             .padding(horizontal = 16.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -215,12 +259,75 @@ private fun LectureItemContent(
                         append(" \u00b7 ${lecture.durationFormatted}")
                     }
                     lecture.languageName?.let { append(" \u00b7 $it") }
+                    formatRelativeDate(lecture.dateRecorded ?: lecture.dateCreated)?.let {
+                        append(" \u00b7 $it")
+                    }
                 },
                 style = MaterialTheme.typography.bodySmall,
                 color = TATTextSecondary,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
+            // Resume position indicator
+            historyEntry?.let { entry ->
+                val dur = (lecture.duration ?: 0) * 1000L
+                if (entry.position > 0 && dur > 0 && entry.position < dur * 0.95) {
+                    Text(
+                        text = "Resume at ${formatDuration((entry.position / 1000).toInt())}",
+                        fontSize = 11.sp,
+                        color = TATBlue,
+                        maxLines = 1
+                    )
+                }
+            }
+        }
+
+        // Download button
+        if (lecture.noDownload != true && lecture.mp3Url != null) {
+            IconButton(
+                onClick = {
+                    if (!isDownloaded && !isDownloading && !isRetrying) {
+                        if (isFailed) {
+                            LectureDownloader.retryFailed(context, lecture)
+                        } else {
+                            scope.launch { LectureDownloader.download(context, lecture) }
+                        }
+                    }
+                },
+                modifier = Modifier.size(32.dp)
+            ) {
+                when {
+                    isDownloaded -> Icon(
+                        Icons.Filled.CheckCircle,
+                        contentDescription = "Downloaded",
+                        modifier = Modifier.size(18.dp),
+                        tint = TATBlue
+                    )
+                    isDownloading -> CircularProgressIndicator(
+                        progress = { progress ?: 0f },
+                        modifier = Modifier.size(18.dp),
+                        strokeWidth = 2.dp,
+                        color = TATBlue
+                    )
+                    isRetrying -> CircularProgressIndicator(
+                        modifier = Modifier.size(18.dp),
+                        strokeWidth = 2.dp,
+                        color = TATOrange
+                    )
+                    isFailed -> Icon(
+                        Icons.Outlined.CloudDownload,
+                        contentDescription = "Retry download",
+                        modifier = Modifier.size(18.dp),
+                        tint = Color.Red.copy(alpha = 0.7f)
+                    )
+                    else -> Icon(
+                        Icons.Outlined.CloudDownload,
+                        contentDescription = "Download",
+                        modifier = Modifier.size(18.dp),
+                        tint = TATTextSecondary
+                    )
+                }
+            }
         }
 
         // Favorite heart icon

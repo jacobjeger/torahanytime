@@ -23,4 +23,10 @@ interface DownloadDao {
 
     @Query("SELECT SUM(fileSizeBytes) FROM downloaded_lectures")
     suspend fun getTotalSize(): Long?
+
+    @Query("SELECT * FROM downloaded_lectures ORDER BY downloadedAt ASC")
+    suspend fun getAllSync(): List<DownloadedLecture>
+
+    @Query("SELECT COUNT(*) FROM downloaded_lectures")
+    suspend fun getCount(): Int
 }

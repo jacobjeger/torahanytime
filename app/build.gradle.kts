@@ -43,6 +43,7 @@ android {
 
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 }
 
@@ -87,6 +88,9 @@ dependencies {
 
     // DataStore (preferences)
     implementation("androidx.datastore:datastore-preferences:1.1.1")
+
+    // Security (encrypted SharedPreferences)
+    implementation("androidx.security:security-crypto:1.1.0-alpha06")
 
     // Core
     implementation("androidx.core:core-ktx:1.15.0")

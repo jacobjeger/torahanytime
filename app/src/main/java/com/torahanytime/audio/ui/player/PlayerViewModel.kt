@@ -11,16 +11,25 @@ import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
 import com.google.common.util.concurrent.MoreExecutors
 import com.torahanytime.audio.TATApplication
+import com.torahanytime.audio.data.download.LectureDownloader
+import com.torahanytime.audio.data.local.SpeakerSpeedStore
 import com.torahanytime.audio.data.local.entity.ListeningHistory
 import com.torahanytime.audio.data.local.entity.QueueItem
 import com.torahanytime.audio.data.model.Lecture
 import com.torahanytime.audio.player.AudioPlayerService
+import com.torahanytime.audio.ui.common.SnackbarManager
+import com.torahanytime.audio.ui.settings.SettingsKeys
+import com.torahanytime.audio.ui.settings.settingsDataStore
+import com.torahanytime.audio.widget.PlayerWidgetProvider
+import androidx.datastore.preferences.core.edit
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+
+enum class RepeatMode { OFF, ONE, ALL }
 
 data class PlayerState(
     val currentLecture: Lecture? = null,
@@ -29,7 +38,10 @@ data class PlayerState(
     val duration: Long = 0L,
     val playbackSpeed: Float = 1f,
     val sleepTimerMinutes: Int? = null,
-    val queueSize: Int = 0
+    val queueSize: Int = 0,
+    val skipForwardSeconds: Int = 15,
+    val skipBackwardSeconds: Int = 15,
+    val repeatMode: RepeatMode = RepeatMode.OFF
 )
 
 class PlayerViewModel(private val context: Context) : ViewModel() {
@@ -50,6 +62,15 @@ class PlayerViewModel(private val context: Context) : ViewModel() {
                 _state.value = _state.value.copy(queueSize = count)
             }
         }
+        // Observe skip settings
+        viewModelScope.launch {
+            context.settingsDataStore.data.collect { prefs ->
+                _state.value = _state.value.copy(
+                    skipForwardSeconds = prefs[SettingsKeys.SKIP_FORWARD_SECONDS] ?: 15,
+                    skipBackwardSeconds = prefs[SettingsKeys.SKIP_BACKWARD_SECONDS] ?: 15
+                )
+            }
+        }
     }
 
     private fun connectToService() {
@@ -62,12 +83,14 @@ class PlayerViewModel(private val context: Context) : ViewModel() {
                     _state.value = _state.value.copy(isPlaying = isPlaying)
                     // Save position when pausing
                     if (!isPlaying) saveHistory()
+                    // Update widget
+                    updateWidget()
                 }
 
                 override fun onPlaybackStateChanged(playbackState: Int) {
                     if (playbackState == Player.STATE_ENDED) {
                         saveHistory()
-                        playNextInQueue()
+                        handlePlaybackEnded()
                     }
                 }
 
@@ -126,17 +149,39 @@ class PlayerViewModel(private val context: Context) : ViewModel() {
 
     fun playLecture(lecture: Lecture) {
         val mp3Url = lecture.mp3Url ?: return
+        // Check for local download first
+        viewModelScope.launch {
+            val localPath = LectureDownloader.getLocalPath(lecture.id)
+            val actualUrl = localPath ?: mp3Url
+            playWithUrl(lecture, actualUrl)
+            // Increment play count for rate prompt
+            try {
+                context.settingsDataStore.edit { prefs ->
+                    val count = prefs[SettingsKeys.LECTURES_PLAYED_COUNT] ?: 0
+                    prefs[SettingsKeys.LECTURES_PLAYED_COUNT] = count + 1
+                }
+            } catch (_: Exception) {}
+        }
+    }
+
+    private fun playWithUrl(lecture: Lecture, url: String) {
         val mediaItem = AudioPlayerService.buildMediaItem(
             id = lecture.id.toString(),
             title = lecture.title,
             artist = lecture.speakerFullName,
-            mp3Url = mp3Url,
+            mp3Url = url,
             thumbnailUrl = lecture.thumbnailUrl
         )
-        _state.value = _state.value.copy(currentLecture = lecture)
+
+        // Restore per-speaker playback speed
+        val speakerSpeed = SpeakerSpeedStore.getSpeedOrDefault(lecture.speaker)
+        _state.value = _state.value.copy(currentLecture = lecture, playbackSpeed = speakerSpeed)
+        updateWidget()
+
         mediaController?.apply {
             setMediaItem(mediaItem)
             prepare()
+            setPlaybackSpeed(speakerSpeed)
             // Resume from saved position
             viewModelScope.launch {
                 val history = db.historyDao().getByLectureId(lecture.id)
@@ -173,6 +218,10 @@ class PlayerViewModel(private val context: Context) : ViewModel() {
     fun setPlaybackSpeed(speed: Float) {
         mediaController?.setPlaybackSpeed(speed)
         _state.value = _state.value.copy(playbackSpeed = speed)
+        // Save per-speaker speed preference
+        _state.value.currentLecture?.speaker?.let { speakerId ->
+            SpeakerSpeedStore.setSpeed(speakerId, speed)
+        }
     }
 
     // Queue management
@@ -191,6 +240,7 @@ class PlayerViewModel(private val context: Context) : ViewModel() {
                     position = maxPos + 1
                 )
             )
+            SnackbarManager.show("Added to queue")
         }
     }
 
@@ -215,6 +265,74 @@ class PlayerViewModel(private val context: Context) : ViewModel() {
 
     fun clearQueue() {
         viewModelScope.launch { db.queueDao().deleteAll() }
+    }
+
+    private fun handlePlaybackEnded() {
+        when (_state.value.repeatMode) {
+            RepeatMode.ONE -> {
+                // Replay current lecture
+                mediaController?.seekTo(0)
+                mediaController?.play()
+            }
+            RepeatMode.ALL -> {
+                viewModelScope.launch {
+                    val next = db.queueDao().getNext()
+                    if (next != null) {
+                        db.queueDao().removeFirst()
+                        playLecture(Lecture(
+                            id = next.lectureId,
+                            title = next.title,
+                            speakerNameFirst = next.speakerName.split(" ").firstOrNull(),
+                            speakerNameLast = next.speakerName.split(" ").drop(1).joinToString(" "),
+                            mp3Url = next.mp3Url,
+                            thumbnailUrl = next.thumbnailUrl,
+                            duration = next.duration,
+                            languageName = next.languageName
+                        ))
+                    } else {
+                        // No more in queue — replay current
+                        mediaController?.seekTo(0)
+                        mediaController?.play()
+                    }
+                }
+            }
+            RepeatMode.OFF -> {
+                playNextInQueue()
+            }
+        }
+    }
+
+    fun cycleRepeatMode() {
+        val next = when (_state.value.repeatMode) {
+            RepeatMode.OFF -> RepeatMode.ONE
+            RepeatMode.ONE -> RepeatMode.ALL
+            RepeatMode.ALL -> RepeatMode.OFF
+        }
+        _state.value = _state.value.copy(repeatMode = next)
+        val label = when (next) {
+            RepeatMode.OFF -> "Repeat off"
+            RepeatMode.ONE -> "Repeat one"
+            RepeatMode.ALL -> "Repeat all"
+        }
+        SnackbarManager.show(label)
+    }
+
+    // Bookmarks
+    fun addBookmark(note: String = "") {
+        val lecture = _state.value.currentLecture ?: return
+        val position = _state.value.currentPosition
+        viewModelScope.launch {
+            db.bookmarkDao().insert(
+                com.torahanytime.audio.data.local.entity.Bookmark(
+                    lectureId = lecture.id,
+                    position = position,
+                    note = note,
+                    lectureTitle = lecture.title,
+                    speakerName = lecture.speakerFullName
+                )
+            )
+            SnackbarManager.show("Bookmark saved")
+        }
     }
 
     // Sleep timer
@@ -244,6 +362,16 @@ class PlayerViewModel(private val context: Context) : ViewModel() {
     fun cancelSleepTimer() {
         sleepTimerJob?.cancel()
         _state.value = _state.value.copy(sleepTimerMinutes = null)
+    }
+
+    private fun updateWidget() {
+        val s = _state.value
+        PlayerWidgetProvider.updateNowPlaying(
+            context,
+            title = s.currentLecture?.title ?: "TorahAnytime",
+            speaker = s.currentLecture?.speakerFullName ?: "Tap to open",
+            isPlaying = s.isPlaying
+        )
     }
 
     fun stop() {

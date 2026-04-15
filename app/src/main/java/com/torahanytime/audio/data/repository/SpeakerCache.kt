@@ -24,6 +24,9 @@ object SpeakerCache {
     private val _totalCount = MutableStateFlow(0)
     val totalCount: StateFlow<Int> = _totalCount
 
+    private val _error = MutableStateFlow<String?>(null)
+    val error: StateFlow<String?> = _error
+
     private var loaded = false
     private var loadingStarted = false
 
@@ -38,8 +41,14 @@ object SpeakerCache {
         loadAll()
     }
 
+    fun retry() {
+        loadingStarted = false
+        loaded = false
+    }
+
     private suspend fun loadAll() {
         _loading.value = true
+        _error.value = null
         var offset = 0
         var totalSpeakers = Int.MAX_VALUE
         try {
@@ -61,7 +70,7 @@ object SpeakerCache {
             }
             loaded = true
         } catch (e: Exception) {
-            e.printStackTrace()
+            _error.value = "Failed to load speakers"
         }
         _loading.value = false
     }

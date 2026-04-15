@@ -29,3 +29,33 @@ data class TopicsResponse(
     val total: Int,
     val items: List<Topic>
 )
+
+@JsonClass(generateAdapter = true)
+data class AllTopicsResponse(
+    val topics: List<ApiCategory> = emptyList()
+)
+
+@JsonClass(generateAdapter = true)
+data class ApiCategory(
+    val id: Int,
+    val name: String,
+    val slug: String? = null,
+    val lectures: Int = 0,
+    val speakers: Int = 0,
+    @Json(name = "display_active") val displayActive: Boolean = true,
+    @Json(name = "subCategory") val subCategories: List<ApiCategory> = emptyList()
+) {
+    /** Convert to a Topic for the UI */
+    fun toTopic(): Topic = Topic(
+        id = "topics_$id",
+        text = name,
+        slug = slug,
+        data = TopicData(
+            id = id,
+            name = name,
+            slug = slug,
+            lectureCount = lectures,
+            displayActive = displayActive
+        )
+    )
+}

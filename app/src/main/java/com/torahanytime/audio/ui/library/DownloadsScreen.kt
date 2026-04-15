@@ -15,12 +15,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.torahanytime.audio.TATApplication
+import com.torahanytime.audio.data.download.LectureDownloader
 import com.torahanytime.audio.data.local.entity.DownloadedLecture
 import com.torahanytime.audio.data.model.Lecture
 import com.torahanytime.audio.ui.theme.TATBlue
@@ -35,8 +37,13 @@ fun DownloadsScreen(
     onBack: () -> Unit,
     onLectureClick: (Lecture) -> Unit
 ) {
+    val context = LocalContext.current
     val downloads by TATApplication.db.downloadDao().getAll().collectAsState(initial = emptyList())
     val scope = rememberCoroutineScope()
+
+    // Storage stats
+    val totalDownloadBytes = remember(downloads) { downloads.sumOf { it.fileSizeBytes } }
+    val freeBytes = remember { LectureDownloader.getFreeDiskSpace(context) }
 
     Scaffold(
         topBar = {
@@ -45,8 +52,11 @@ fun DownloadsScreen(
                     Column {
                         Text("Downloads", fontWeight = FontWeight.Bold)
                         if (downloads.isNotEmpty()) {
-                            val totalMB = downloads.sumOf { it.fileSizeBytes } / (1024 * 1024)
-                            Text("${downloads.size} lectures \u00b7 ${totalMB}MB", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text(
+                                "${downloads.size} lectures · ${formatBytes(totalDownloadBytes)} used · ${formatBytes(freeBytes)} free",
+                                fontSize = 11.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
                         }
                     }
                 },
@@ -60,10 +70,28 @@ fun DownloadsScreen(
     ) { padding ->
         if (downloads.isEmpty()) {
             Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
-                Text("No downloaded lectures", color = TATTextSecondary)
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text("No downloaded lectures", color = TATTextSecondary)
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        "Tap the cloud icon on any lecture to download",
+                        color = TATTextSecondary.copy(alpha = 0.6f),
+                        fontSize = 12.sp
+                    )
+                }
             }
         } else {
             LazyColumn(modifier = Modifier.fillMaxSize().padding(padding)) {
+                // Storage bar
+                item {
+                    StorageBar(
+                        usedBytes = totalDownloadBytes,
+                        freeBytes = freeBytes,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                    )
+                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                }
+
                 items(downloads, key = { it.lectureId }) { dl ->
                     Row(
                         modifier = Modifier
@@ -88,7 +116,10 @@ fun DownloadsScreen(
                         }
                         Column(modifier = Modifier.weight(1f)) {
                             Text(dl.title, fontWeight = FontWeight.Medium, fontSize = 14.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                            Text("${dl.speakerName} \u00b7 ${formatDuration(dl.duration)}", fontSize = 12.sp, color = TATTextSecondary)
+                            Text(
+                                "${dl.speakerName} · ${formatDuration(dl.duration)} · ${formatBytes(dl.fileSizeBytes)}",
+                                fontSize = 12.sp, color = TATTextSecondary
+                            )
                         }
                         IconButton(onClick = {
                             scope.launch {
@@ -103,5 +134,38 @@ fun DownloadsScreen(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun StorageBar(
+    usedBytes: Long,
+    freeBytes: Long,
+    modifier: Modifier = Modifier
+) {
+    val totalBytes = usedBytes + freeBytes
+    val fraction = if (totalBytes > 0) (usedBytes.toFloat() / totalBytes).coerceIn(0f, 1f) else 0f
+
+    Column(modifier = modifier.fillMaxWidth()) {
+        LinearProgressIndicator(
+            progress = { fraction },
+            modifier = Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(3.dp)),
+            color = TATBlue,
+            trackColor = MaterialTheme.colorScheme.surfaceVariant
+        )
+        Spacer(Modifier.height(4.dp))
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            Text("${formatBytes(usedBytes)} downloads", fontSize = 11.sp, color = TATTextSecondary)
+            Text("${formatBytes(freeBytes)} free", fontSize = 11.sp, color = TATTextSecondary)
+        }
+    }
+}
+
+private fun formatBytes(bytes: Long): String {
+    return when {
+        bytes < 1024 -> "$bytes B"
+        bytes < 1024 * 1024 -> "${bytes / 1024} KB"
+        bytes < 1024L * 1024 * 1024 -> "${bytes / (1024 * 1024)} MB"
+        else -> String.format("%.1f GB", bytes / (1024.0 * 1024 * 1024))
     }
 }

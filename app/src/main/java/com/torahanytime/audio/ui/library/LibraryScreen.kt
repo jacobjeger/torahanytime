@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.filled.Logout
+import androidx.compose.material.icons.outlined.Bookmark
 import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material.icons.outlined.Headphones
@@ -36,7 +37,9 @@ fun LibraryScreen(
     onNavigateToFavorites: () -> Unit = {},
     onNavigateToFollowing: () -> Unit = {},
     onNavigateToDownloads: () -> Unit = {},
-    onNavigateToSettings: () -> Unit = {}
+    onNavigateToBookmarks: () -> Unit = {},
+    onNavigateToSettings: () -> Unit = {},
+    onNavigateToQueue: () -> Unit = {}
 ) {
     val isLoggedIn by AuthManager.isLoggedIn.collectAsState()
     val userEmail by AuthManager.userEmail.collectAsState()
@@ -105,8 +108,8 @@ fun LibraryScreen(
 
             LibraryRow(
                 icon = Icons.Outlined.QueueMusic,
-                label = "Playlists",
-                onClick = onNavigateToPlaylists
+                label = "Queue",
+                onClick = onNavigateToQueue
             )
             HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
 
@@ -128,6 +131,13 @@ fun LibraryScreen(
                 icon = Icons.Outlined.Download,
                 label = "Downloads",
                 onClick = onNavigateToDownloads
+            )
+            HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+
+            LibraryRow(
+                icon = Icons.Outlined.Bookmark,
+                label = "Bookmarks",
+                onClick = onNavigateToBookmarks
             )
 
             if (isLoggedIn) {

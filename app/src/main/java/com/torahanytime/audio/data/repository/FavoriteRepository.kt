@@ -5,6 +5,7 @@ import com.torahanytime.audio.data.api.ApiClient
 import com.torahanytime.audio.data.api.AuthManager
 import com.torahanytime.audio.data.local.entity.FavoriteLecture
 import com.torahanytime.audio.data.model.Lecture
+import com.torahanytime.audio.ui.common.SnackbarManager
 import kotlinx.coroutines.flow.Flow
 
 object FavoriteRepository {
@@ -20,6 +21,7 @@ object FavoriteRepository {
 
         if (isFav) {
             dao.delete(lecture.id)
+            SnackbarManager.show("Removed from favorites")
             if (AuthManager.getToken() != null) {
                 try { api.unfavoriteLecture(mapOf("lecture_id" to lecture.id)) } catch (_: Exception) {}
             }
@@ -36,6 +38,7 @@ object FavoriteRepository {
                     syncedWithServer = AuthManager.getToken() != null
                 )
             )
+            SnackbarManager.show("Added to favorites")
             if (AuthManager.getToken() != null) {
                 try { api.favoriteLecture(mapOf("lecture_id" to lecture.id)) } catch (_: Exception) {}
             }

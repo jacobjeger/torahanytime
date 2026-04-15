@@ -18,6 +18,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import android.content.Intent
+import androidx.compose.ui.platform.LocalContext
 import coil.compose.AsyncImage
 import com.torahanytime.audio.data.repository.FavoriteRepository
 import com.torahanytime.audio.ui.theme.TATBlue
@@ -38,10 +40,14 @@ fun PlayerScreen(
     onSpeedChange: (Float) -> Unit,
     onSleepTimer: ((Int) -> Unit)? = null,
     onSleepTimerEndOfLecture: (() -> Unit)? = null,
-    onCancelSleepTimer: (() -> Unit)? = null
+    onCancelSleepTimer: (() -> Unit)? = null,
+    onCycleRepeat: (() -> Unit)? = null,
+    onAddBookmark: ((String) -> Unit)? = null
 ) {
     val lecture = state.currentLecture ?: return
+    val context = LocalContext.current
     var showSleepTimer by remember { mutableStateOf(false) }
+    var showBookmarkDialog by remember { mutableStateOf(false) }
     val isFavorite by FavoriteRepository.isFavorite(lecture.id).collectAsState(initial = false)
     val scope = rememberCoroutineScope()
 
@@ -71,6 +77,21 @@ fun PlayerScreen(
                 navigationIcon = {
                     IconButton(onClick = onBack, modifier = Modifier.focusable()) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back")
+                    }
+                },
+                actions = {
+                    IconButton(
+                        onClick = {
+                            val shareText = "${lecture.title} by ${lecture.speakerFullName}\nhttps://www.torahanytime.com/#/lectures?id=${lecture.id}"
+                            val intent = Intent(Intent.ACTION_SEND).apply {
+                                type = "text/plain"
+                                putExtra(Intent.EXTRA_TEXT, shareText)
+                            }
+                            context.startActivity(Intent.createChooser(intent, "Share lecture"))
+                        },
+                        modifier = Modifier.focusable()
+                    ) {
+                        Icon(Icons.Default.Share, "Share")
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -202,9 +223,12 @@ fun PlayerScreen(
                     )
                 }
 
-                // Skip back 15s
-                IconButton(onClick = onSkipBackward, modifier = Modifier.focusable()) {
-                    Icon(Icons.Default.Replay10, "Skip back", modifier = Modifier.size(32.dp))
+                // Skip backward
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    IconButton(onClick = onSkipBackward, modifier = Modifier.focusable()) {
+                        Icon(Icons.Default.Replay10, "Skip back", modifier = Modifier.size(32.dp))
+                    }
+                    Text("${state.skipBackwardSeconds}s", fontSize = 9.sp, color = TATTextSecondary)
                 }
 
                 // Play/Pause
@@ -222,9 +246,12 @@ fun PlayerScreen(
                     )
                 }
 
-                // Skip forward 15s
-                IconButton(onClick = onSkipForward, modifier = Modifier.focusable()) {
-                    Icon(Icons.Default.Forward10, "Skip forward", modifier = Modifier.size(32.dp))
+                // Skip forward
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    IconButton(onClick = onSkipForward, modifier = Modifier.focusable()) {
+                        Icon(Icons.Default.Forward10, "Skip forward", modifier = Modifier.size(32.dp))
+                    }
+                    Text("${state.skipForwardSeconds}s", fontSize = 9.sp, color = TATTextSecondary)
                 }
 
                 // Sleep timer
@@ -240,6 +267,86 @@ fun PlayerScreen(
                     )
                 }
             }
+
+            Spacer(Modifier.height(12.dp))
+
+            // Repeat & Bookmark row
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                if (onCycleRepeat != null) {
+                    IconButton(
+                        onClick = onCycleRepeat,
+                        modifier = Modifier.focusable()
+                    ) {
+                        Icon(
+                            imageVector = when (state.repeatMode) {
+                                RepeatMode.ONE -> Icons.Default.RepeatOne
+                                else -> Icons.Default.Repeat
+                            },
+                            contentDescription = "Repeat",
+                            modifier = Modifier.size(24.dp),
+                            tint = if (state.repeatMode != RepeatMode.OFF) TATBlue else TATTextSecondary
+                        )
+                    }
+                }
+                Spacer(Modifier.width(16.dp))
+                if (onAddBookmark != null) {
+                    IconButton(
+                        onClick = { showBookmarkDialog = true },
+                        modifier = Modifier.focusable()
+                    ) {
+                        Icon(
+                            Icons.Default.BookmarkAdd,
+                            "Add bookmark",
+                            modifier = Modifier.size(24.dp),
+                            tint = TATTextSecondary
+                        )
+                    }
+                }
+            }
         }
+    }
+
+    if (showBookmarkDialog) {
+        var noteText by remember { mutableStateOf("") }
+        AlertDialog(
+            onDismissRequest = { showBookmarkDialog = false },
+            title = { Text("Add Bookmark") },
+            text = {
+                Column {
+                    Text(
+                        "at ${formatDuration((state.currentPosition / 1000).toInt())}",
+                        fontSize = 13.sp,
+                        color = TATTextSecondary
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = noteText,
+                        onValueChange = { noteText = it },
+                        label = { Text("Note (optional)") },
+                        modifier = Modifier.fillMaxWidth().focusable(),
+                        singleLine = true
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        onAddBookmark?.invoke(noteText)
+                        showBookmarkDialog = false
+                    },
+                    modifier = Modifier.focusable()
+                ) { Text("Save", color = TATBlue) }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = { showBookmarkDialog = false },
+                    modifier = Modifier.focusable()
+                ) { Text("Cancel") }
+            }
+        )
     }
 }

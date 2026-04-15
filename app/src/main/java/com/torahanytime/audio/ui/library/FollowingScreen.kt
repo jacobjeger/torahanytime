@@ -22,6 +22,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import com.torahanytime.audio.data.api.ApiClient
 import com.torahanytime.audio.data.model.FollowedSpeaker
+import com.torahanytime.audio.ui.common.ErrorRetryState
 import com.torahanytime.audio.ui.theme.TATBlue
 import com.torahanytime.audio.ui.theme.TATTextSecondary
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -81,9 +82,11 @@ fun FollowingScreen(
             loading -> Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
                 CircularProgressIndicator(color = TATBlue)
             }
-            error != null -> Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
-                Text(error ?: "", color = TATTextSecondary)
-            }
+            error != null -> ErrorRetryState(
+                message = error ?: "Something went wrong",
+                onRetry = { vm.load() },
+                modifier = Modifier.padding(padding)
+            )
             speakers.isEmpty() -> Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
                 Text("Not following any speakers yet", color = TATTextSecondary)
             }
